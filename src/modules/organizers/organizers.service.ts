@@ -415,6 +415,130 @@ export async function getOrganizerAnalytics(id: string) {
   return analyticsData;
 }
 
+// ---------- Organizer events list (all statuses) ----------
+
+const eventStatusMap: Record<string, string> = {
+  PUBLISHED: "Approved",
+  PENDING_APPROVAL: "Pending Review",
+  DRAFT: "Draft",
+  CANCELLED: "Flagged",
+  REJECTED: "Rejected",
+  COMPLETED: "Approved",
+};
+
+export async function listOrganizerEvents(organizerId: string, page = 1, limit = 50) {
+  const skip = (page - 1) * limit;
+
+  const [events, total] = await Promise.all([
+    prisma.event.findMany({
+      where: { organizerId },
+      include: {
+        organizer: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            avatar: true,
+          },
+        },
+        venue: {
+          select: {
+            id: true,
+            venueName: true,
+            venueCity: true,
+            venueState: true,
+            venueCountry: true,
+            venueAddress: true,
+          },
+        },
+        ticketTypes: {
+          where: { isActive: true },
+          select: { id: true, name: true, price: true, quantity: true },
+          orderBy: { price: "asc" as const },
+          take: 1,
+        },
+        _count: {
+          select: {
+            registrations: { where: { status: "CONFIRMED" } },
+            reviews: true,
+          },
+        },
+        reviews: { select: { rating: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.event.count({ where: { organizerId } }),
+  ]);
+
+  const transformed = events.map((event: any) => {
+    const avgRating =
+      event.reviews.length > 0
+        ? event.reviews.reduce(
+            (sum: number, r: { rating: number | null }) => sum + (r.rating ?? 0),
+            0
+          ) / event.reviews.length
+        : 0;
+    const cheapestTicket = event.ticketTypes[0]?.price ?? 0;
+    return {
+      id: event.id,
+      title: event.title,
+      description: event.description,
+      shortDescription: event.shortDescription,
+      slug: event.slug,
+      startDate: event.startDate.toISOString(),
+      endDate: event.endDate.toISOString(),
+      timezone: event.timezone,
+      location: event.venue?.venueName ?? "Virtual Event",
+      city: event.venue?.venueCity ?? "",
+      state: event.venue?.venueState ?? "",
+      country: event.venue?.venueCountry ?? "",
+      address: event.venue?.venueAddress ?? "",
+      isVirtual: event.isVirtual,
+      virtualLink: event.virtualLink,
+      status: eventStatusMap[event.status] ?? "Pending Review",
+      category: event.category ?? [],
+      tags: event.tags ?? [],
+      eventType: event.eventType ?? [],
+      isFeatured: event.isFeatured,
+      isVIP: event.isVIP,
+      isVerified: event.isVerified ?? false,
+      verifiedAt: event.verifiedAt?.toISOString() ?? null,
+      verifiedBy: event.verifiedBy ?? "",
+      attendees: event._count.registrations,
+      totalReviews: event._count.reviews,
+      averageRating: avgRating,
+      cheapestTicket,
+      currency: event.currency,
+      images: event.images,
+      bannerImage: event.bannerImage,
+      thumbnailImage: event.thumbnailImage,
+      organizer: {
+        id: event.organizer.id,
+        name: `${event.organizer.firstName} ${event.organizer.lastName}`.trim(),
+        email: event.organizer.email,
+        avatar: event.organizer.avatar,
+      },
+      createdAt: event.createdAt.toISOString(),
+      updatedAt: event.updatedAt.toISOString(),
+    };
+  });
+
+  return {
+    events: transformed,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page * limit < total,
+      hasPreviousPage: page > 1,
+    },
+  };
+}
+
 // ---------- Organizer total attendees ----------
 
 export async function getOrganizerTotalAttendees(id: string) {

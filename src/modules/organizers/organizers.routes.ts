@@ -4,6 +4,7 @@ import {
   getOrganizerHandler,
   getOrganizerAnalyticsHandler,
   getOrganizerTotalAttendeesHandler,
+  getOrganizerEventsHandler,
   updateOrganizerEventHandler,
   deleteOrganizerEventHandler,
   createOrganizerEventHandler,
@@ -34,6 +35,9 @@ router.get("/organizers/:id/analytics", getOrganizerAnalyticsHandler);
 
 // Organizer total attendees
 router.get("/organizers/:id/total-attendees", getOrganizerTotalAttendeesHandler);
+
+// Organizer events list (all statuses, for "my events")
+router.get("/organizers/:id/events", getOrganizerEventsHandler);
 
 // Organizer event create/update/delete (authenticated)
 router.post("/organizers/:id/events", requireUser, createOrganizerEventHandler);

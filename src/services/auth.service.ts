@@ -25,6 +25,8 @@ function mapUserRoleToAuthRole(role: string | null | undefined): AuthRole {
       return "ORGANIZER";
     case "EXHIBITOR":
       return "EXHIBITOR";
+    case "VENUE_MANAGER":
+      return "VENUE_MANAGER";
     case "SUPER_ADMIN":
       return "SUPER_ADMIN";
     case "SUB_ADMIN":

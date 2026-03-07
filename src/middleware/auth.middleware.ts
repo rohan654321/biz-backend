@@ -82,3 +82,25 @@ export function requireSuperAdmin(req: Request, res: Response, next: NextFunctio
   }
 }
 
+/**
+ * Use after requireAdmin. SUPER_ADMIN bypasses; SUB_ADMIN must have the permission in token.permissions.
+ */
+export function requirePermission(permissionName: string) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.auth) {
+      return res.status(401).json({ message: "Authorization required" });
+    }
+    if (req.auth.role === "SUPER_ADMIN") {
+      return next();
+    }
+    const permissions: string[] = req.auth.permissions ?? [];
+    if (permissions.includes(permissionName)) {
+      return next();
+    }
+    return res.status(403).json({
+      message: "Insufficient permissions",
+      required: permissionName,
+    });
+  };
+}
+

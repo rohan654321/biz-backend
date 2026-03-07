@@ -6,9 +6,11 @@ import {
   adminDeleteEvent,
   adminApproveEvent,
   adminRejectEvent,
+  adminGetEventStats,
   adminListVenues,
   adminListVisitors,
   adminGetDashboardSummary,
+  adminListEventCategories,
 } from "./admin.service";
 
 export async function adminGetEventsHandler(req: Request, res: Response) {
@@ -16,12 +18,14 @@ export async function adminGetEventsHandler(req: Request, res: Response) {
     const page = req.query.page ? Number(req.query.page) : undefined;
     const limit = req.query.limit ? Number(req.query.limit) : undefined;
     const status = (req.query.status as string | undefined) ?? undefined;
+    const search = (req.query.search as string | undefined) ?? undefined;
 
-    const result = await adminListEvents({ page, limit, status });
+    const result = await adminListEvents({ page, limit, status, search });
 
     return res.json({
       success: true,
-      data: result,
+      events: result.events,
+      pagination: result.pagination,
     });
   } catch (error: any) {
     // eslint-disable-next-line no-console
@@ -29,6 +33,29 @@ export async function adminGetEventsHandler(req: Request, res: Response) {
     return res.status(500).json({
       success: false,
       error: "Failed to fetch events",
+      details: error.message,
+    });
+  }
+}
+
+export async function adminGetEventStatsHandler(_req: Request, res: Response) {
+  try {
+    const stats = await adminGetEventStats();
+    return res.json({
+      success: true,
+      stats: {
+        total: stats.total,
+        approved: stats.approved,
+        rejected: stats.rejected,
+        pending: stats.pending,
+      },
+    });
+  } catch (error: any) {
+    // eslint-disable-next-line no-console
+    console.error("Admin get event stats error (backend):", error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to fetch event stats",
       details: error.message,
     });
   }
@@ -64,7 +91,11 @@ export async function adminGetEventByIdHandler(req: Request, res: Response) {
 export async function adminUpdateEventHandler(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const result = await adminUpdateEvent(id, req.body ?? {});
+    const body = req.body ?? {};
+    if (body.isVerified === true && !body.verifiedBy && req.auth?.sub) {
+      body.verifiedBy = req.auth.sub;
+    }
+    const result = await adminUpdateEvent(id, body);
 
     if ("error" in result && result.error === "NOT_FOUND") {
       return res.status(404).json({
@@ -247,6 +278,17 @@ export async function adminGetDashboardHandler(_req: Request, res: Response) {
       error: "Failed to fetch dashboard data",
       details: error.message,
     });
+  }
+}
+
+export async function adminGetEventCategoriesHandler(_req: Request, res: Response) {
+  try {
+    const categories = await adminListEventCategories();
+    return res.json(categories);
+  } catch (error: any) {
+    // eslint-disable-next-line no-console
+    console.error("Admin get event categories error (backend):", error);
+    return res.status(500).json([]);
   }
 }
 

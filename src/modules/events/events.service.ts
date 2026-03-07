@@ -307,30 +307,16 @@ export async function getEventByIdentifier(id: string) {
     include,
   });
 
+  const slugOrTitle = id.replace(/-/g, " ").trim();
   if (!event) {
     event = await prisma.event.findFirst({
       where: {
         OR: [
           { slug: id },
-          {
-            title: {
-              equals: id.replace(/-/g, " "),
-              mode: "insensitive",
-            },
-          },
+          { slug: { contains: slugOrTitle, mode: "insensitive" } },
+          { title: { equals: slugOrTitle, mode: "insensitive" } },
+          { title: { contains: slugOrTitle, mode: "insensitive" } },
         ],
-      },
-      include,
-    });
-  }
-
-  if (!event) {
-    event = await prisma.event.findFirst({
-      where: {
-        title: {
-          contains: id.replace(/-/g, " "),
-          mode: "insensitive",
-        },
       },
       include,
     });

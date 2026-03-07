@@ -1,0 +1,117 @@
+import bcrypt from "bcryptjs";
+import prisma from "../../../config/prisma";
+import { parseListQuery } from "../../../lib/admin-response";
+
+const SUBADMIN_SAFE_SORT = ["createdAt", "updatedAt", "email", "name"] as const;
+
+export async function listSubAdmins(query: Record<string, unknown>, superAdminId: string) {
+  const parsed = parseListQuery(query);
+  const sort = SUBADMIN_SAFE_SORT.includes(parsed.sort as any) ? parsed.sort : "createdAt";
+  const { page, limit, search, skip, order } = parsed;
+  const where: any = { createdById: superAdminId };
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: "insensitive" } },
+      { email: { contains: search, mode: "insensitive" } },
+    ];
+  }
+  const [items, total] = await Promise.all([
+    prisma.subAdmin.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { [sort]: order },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        phone: true,
+        isActive: true,
+        permissions: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
+    prisma.subAdmin.count({ where }),
+  ]);
+  const data = items.map((u) => ({
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    phone: u.phone,
+    isActive: u.isActive,
+    permissions: u.permissions ?? [],
+    createdAt: u.createdAt.toISOString(),
+    updatedAt: u.updatedAt.toISOString(),
+  }));
+  return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+}
+
+export async function getSubAdminById(id: string) {
+  const sub = await prisma.subAdmin.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      phone: true,
+      isActive: true,
+      permissions: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+  if (!sub) return null;
+  return {
+    ...sub,
+    createdAt: sub.createdAt.toISOString(),
+    updatedAt: sub.updatedAt.toISOString(),
+  };
+}
+
+export async function createSubAdmin(body: Record<string, unknown>, superAdminId: string) {
+  const email = String(body.email ?? "").trim().toLowerCase();
+  if (!email) throw new Error("Email is required");
+  const existing = await prisma.subAdmin.findUnique({ where: { email } });
+  if (existing) throw new Error("Sub-admin with this email already exists");
+  const password = String(body.password ?? "").trim();
+  if (!password || password.length < 6) throw new Error("Password must be at least 6 characters");
+  const hashed = await bcrypt.hash(password, 12);
+  const permissions = Array.isArray(body.permissions) ? body.permissions : [];
+  const sub = await prisma.subAdmin.create({
+    data: {
+      email,
+      password: hashed,
+      name: String(body.name ?? "").trim() || email.split("@")[0],
+      phone: body.phone != null ? String(body.phone) : null,
+      isActive: body.isActive !== false,
+      permissions,
+      createdById: superAdminId,
+    },
+  });
+  return getSubAdminById(sub.id);
+}
+
+export async function updateSubAdmin(id: string, body: Record<string, unknown>) {
+  const existing = await prisma.subAdmin.findUnique({ where: { id } });
+  if (!existing) return null;
+  const data: any = {};
+  if (body.name !== undefined) data.name = String(body.name).trim();
+  if (body.email !== undefined) data.email = String(body.email).trim().toLowerCase();
+  if (body.phone !== undefined) data.phone = body.phone ? String(body.phone) : null;
+  if (body.isActive !== undefined) data.isActive = !!body.isActive;
+  if (Array.isArray(body.permissions)) data.permissions = body.permissions;
+  if (body.password !== undefined && String(body.password).trim().length >= 6) {
+    data.password = await bcrypt.hash(String(body.password).trim(), 12);
+  }
+  if (Object.keys(data).length === 0) return getSubAdminById(id);
+  await prisma.subAdmin.update({ where: { id }, data });
+  return getSubAdminById(id);
+}
+
+export async function deleteSubAdmin(id: string) {
+  const existing = await prisma.subAdmin.findUnique({ where: { id } });
+  if (!existing) return null;
+  await prisma.subAdmin.delete({ where: { id } });
+  return { deleted: true };
+}

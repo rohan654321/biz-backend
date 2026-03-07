@@ -1,4 +1,10 @@
-export type AuthRole = "USER" | "ORGANIZER" | "EXHIBITOR" | "SUPER_ADMIN" | "SUB_ADMIN";
+export type AuthRole =
+  | "USER"
+  | "ORGANIZER"
+  | "EXHIBITOR"
+  | "SUPER_ADMIN"
+  | "SUB_ADMIN"
+  | "VENUE_MANAGER";
 
 export type AuthDomain = "USER" | "ADMIN";
 

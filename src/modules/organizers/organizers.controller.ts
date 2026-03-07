@@ -4,6 +4,7 @@ import {
   getOrganizerById,
   getOrganizerAnalytics,
   getOrganizerTotalAttendees,
+  listOrganizerEvents,
   listOrganizerLeads,
   listOrganizerLeadsByType,
   listOrganizerPromotions,
@@ -78,10 +79,33 @@ export async function getOrganizerTotalAttendeesHandler(req: Request, res: Respo
   } catch (error: any) {
     // eslint-disable-next-line no-console
     console.error("Error fetching organizer total attendees (backend):", error);
+    return res.status(500).json({
+      error: "Failed to fetch total attendees",
+      details: error.message,
+    });
+  }
+}
+
+export async function getOrganizerEventsHandler(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+
+    const result = await listOrganizerEvents(id, page, limit);
+
+    return res.json({
+      success: true,
+      events: result.events,
+      pagination: result.pagination,
+    });
+  } catch (error: any) {
+    // eslint-disable-next-line no-console
+    console.error("Error fetching organizer events (backend):", error);
     if (error instanceof Error && error.message.includes("Organizer ID is required")) {
       return res.status(400).json({ success: false, error: "Organizer ID is required" });
     }
-    return res.status(500).json({ success: false, error: "Failed to fetch total attendees" });
+    return res.status(500).json({ success: false, error: "Failed to fetch organizer events" });
   }
 }
 

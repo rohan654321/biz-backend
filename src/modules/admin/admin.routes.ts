@@ -1,41 +1,63 @@
 import { Router } from "express";
-import { requireAdmin } from "../../middleware/auth.middleware";
+import { requireAdmin, requirePermission } from "../../middleware/auth.middleware";
 import {
   adminGetEventsHandler,
+  adminGetEventStatsHandler,
   adminGetEventByIdHandler,
   adminUpdateEventHandler,
   adminDeleteEventHandler,
   adminApproveEventHandler,
   adminRejectEventHandler,
-  adminGetVenuesHandler,
-  adminGetVisitorsHandler,
   adminGetDashboardHandler,
 } from "./admin.controller";
 import { createEventAdminHandler } from "../events/events.controller";
 
+import organizersRoutes from "./organizers/organizers.routes";
+import exhibitorsRoutes from "./exhibitors/exhibitors.routes";
+import speakersRoutes from "./speakers/speakers.routes";
+import venuesRoutes from "./venues/venues.routes";
+import visitorsRoutes from "./visitors/visitors.routes";
+import usersRoutes from "./users/users.routes";
+import subAdminsRoutes from "./sub-admins/sub-admins.routes";
+import eventCategoriesRoutes from "./event-categories/event-categories.routes";
+import financialRoutes from "./financial/financial.routes";
+import reportsRoutes from "./reports/reports.routes";
+import notificationsRoutes from "./notifications/notifications.routes";
+import settingsRoutes from "./settings/settings.routes";
+import supportRoutes from "./support/support.routes";
+import integrationsRoutes from "./integrations/integrations.routes";
+import analyticsRoutes from "./analytics/analytics.routes";
+
 const router = Router();
 
-// Events CRUD for admin
+// ─── Events (existing) ─────────────────────────────────────────────────────
+router.get("/events/stats", requireAdmin, adminGetEventStatsHandler);
 router.get("/events", requireAdmin, adminGetEventsHandler);
 router.get("/events/:id", requireAdmin, adminGetEventByIdHandler);
 router.patch("/events/:id", requireAdmin, adminUpdateEventHandler);
 router.delete("/events/:id", requireAdmin, adminDeleteEventHandler);
-
-// Create event (existing behavior)
 router.post("/events", requireAdmin, createEventAdminHandler);
+router.post("/events/approve", requireAdmin, requirePermission("approve_events"), adminApproveEventHandler);
+router.post("/events/reject", requireAdmin, requirePermission("approve_events"), adminRejectEventHandler);
 
-// Event approval / rejection
-router.post("/events/approve", requireAdmin, adminApproveEventHandler);
-router.post("/events/reject", requireAdmin, adminRejectEventHandler);
-
-// Venues list
-router.get("/venues", requireAdmin, adminGetVenuesHandler);
-
-// Visitors list
-router.get("/visitors", requireAdmin, adminGetVisitorsHandler);
-
-// Admin dashboard summary
+// ─── Dashboard ─────────────────────────────────────────────────────────────
 router.get("/dashboard", requireAdmin, adminGetDashboardHandler);
 
-export default router;
+// ─── Resource modules ───────────────────────────────────────────────────────
+router.use("/organizers", organizersRoutes);
+router.use("/exhibitors", exhibitorsRoutes);
+router.use("/speakers", speakersRoutes);
+router.use("/venues", venuesRoutes);
+router.use("/visitors", visitorsRoutes);
+router.use("/users", usersRoutes);
+router.use("/sub-admins", subAdminsRoutes);
+router.use("/event-categories", eventCategoriesRoutes);
+router.use("/financial", financialRoutes);
+router.use("/reports", reportsRoutes);
+router.use("/notifications", notificationsRoutes);
+router.use("/settings", settingsRoutes);
+router.use("/support", supportRoutes);
+router.use("/integrations", integrationsRoutes);
+router.use("/analytics", analyticsRoutes);
 
+export default router;

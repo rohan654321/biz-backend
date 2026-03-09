@@ -24,7 +24,7 @@
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "multer": "^2.1.0",
-    "nodemailer": "^6.9.16"
+    "nodemailer": "^6.10.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -33,8 +33,21 @@
     "@types/jsonwebtoken": "^9.0.6",
     "@types/morgan": "^1.9.9",
     "@types/node": "^22.0.0",
+    "@types/nodemailer": "^7.0.11",
     "prisma": "^6.0.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.6.0"
-  }
+  },
+  "description": "Express + TypeScript API. Uses **PostgreSQL** (Neon) and Prisma. No MongoDB/Mongoose.",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sandeep1816/biz-backend.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Sandeep1816/biz-backend/issues"
+  },
+  "homepage": "https://github.com/Sandeep1816/biz-backend#readme"
 }

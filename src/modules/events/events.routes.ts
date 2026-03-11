@@ -13,6 +13,7 @@ import {
   getRecentEventsHandler,
   getVipEventsHandler,
   getEventLeadsHandler,
+  createEventLeadHandler,
   getEventExhibitorsHandler,
   getEventSpeakersHandler,
   getEventBrochureHandler,

@@ -1,5 +1,10 @@
 import { Request, Response } from "express";
-import { listVenues, getVenueEvents } from "./venues.service";
+import {
+  listVenues,
+  getVenueEvents,
+  listVenueReviews,
+  createVenueReview,
+} from "./venues.service";
 
 export async function getVenuesHandler(req: Request, res: Response) {
   try {
@@ -40,6 +45,64 @@ export async function getVenueEventsHandler(req: Request, res: Response) {
     // eslint-disable-next-line no-console
     console.error("Error fetching events by venue ID (backend):", error);
     return res.status(500).json({ success: false, error: "Server Error" });
+  }
+}
+
+export async function getVenueReviewsHandler(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Invalid venue ID" });
+    }
+
+    const reviews = await listVenueReviews(id);
+    return res.json({
+      success: true,
+      reviews,
+    });
+  } catch (error: any) {
+    // eslint-disable-next-line no-console
+    console.error("Error fetching venue reviews (backend):", error);
+    return res
+      .status(500)
+      .json({ success: false, error: "Failed to fetch reviews" });
+  }
+}
+
+export async function createVenueReviewHandler(req: Request, res: Response) {
+  try {
+    const { id } = req.params; // venueId
+    const { userId, rating, comment, title } = req.body ?? {};
+
+    if (!id) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Invalid venue ID" });
+    }
+
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ success: false, error: "User id is required" });
+    }
+
+    const review = await createVenueReview({
+      venueId: id,
+      userId,
+      rating,
+      comment,
+      title,
+    });
+
+    return res.status(201).json(review);
+  } catch (error: any) {
+    // eslint-disable-next-line no-console
+    console.error("Error creating venue review (backend):", error);
+    return res
+      .status(500)
+      .json({ success: false, error: "Failed to create review" });
   }
 }
 

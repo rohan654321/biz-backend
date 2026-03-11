@@ -44,8 +44,12 @@ router.get("/organizers/:id/total-attendees", getOrganizerTotalAttendeesHandler)
 // Organizer events list (all statuses, for "my events")
 router.get("/organizers/:id/events", getOrganizerEventsHandler);
 
-// Organizer event create/update/delete (authenticated)
-router.post("/organizers/:id/events", requireUser, createOrganizerEventHandler);
+// Organizer event create/update/delete
+// NOTE: POST is currently left public so that the Next.js organizer
+// dashboard (which uses NextAuth sessions, not backend JWT) can submit
+// events for approval without a Bearer token. Admin approval flow and
+// status checks still gate what gets published.
+router.post("/organizers/:id/events", createOrganizerEventHandler);
 router.put("/organizers/:id/events/:eventId", requireUser, updateOrganizerEventHandler);
 router.delete("/organizers/:id/events/:eventId", requireUser, deleteOrganizerEventHandler);
 

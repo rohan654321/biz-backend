@@ -4,6 +4,17 @@ import { requireUser } from "../middleware/auth.middleware";
 
 const router = Router();
 
+function serializeUser(user: any) {
+  return {
+    ...user,
+    interests: user.interests ?? [],
+    createdAt: user.createdAt.toISOString(),
+    updatedAt: user.updatedAt.toISOString(),
+    lastLogin: user.lastLogin?.toISOString() ?? null,
+    _count: { eventsAttended: 0, eventsOrganized: 0, connections: 0 },
+  };
+}
+
 /**
  * GET /api/users/:id
  * Used by Next.js server to fetch any user by id (e.g. visitor dashboard).
@@ -14,13 +25,15 @@ router.get("/users/:id", async (req: Request, res: Response) => {
   if (secret) {
     const provided = req.headers["x-internal-secret"];
     if (provided !== secret) {
-      return res.status(401).json({ error: "Unauthorized" });
+      return res.status(401).json({ success: false, error: "Unauthorized" });
     }
   }
 
   const { id } = req.params;
   if (!id) {
-    return res.status(400).json({ error: "User id required" });
+    return res
+      .status(400)
+      .json({ success: false, error: "User id required" });
   }
 
   try {
@@ -52,22 +65,25 @@ router.get("/users/:id", async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res.status(404).json({ error: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, error: "User not found" });
     }
 
-    const userData = {
-      ...user,
-      interests: user.interests ?? [],
-      createdAt: user.createdAt.toISOString(),
-      updatedAt: user.updatedAt.toISOString(),
-      lastLogin: user.lastLogin?.toISOString() ?? null,
-      _count: { eventsAttended: 0, eventsOrganized: 0, connections: 0 },
-    };
+    const userData = serializeUser(user);
 
-    return res.json({ user: userData });
+    // Keep legacy { user } shape for frontend compatibility, but also expose
+    // { success, data } for new consumers.
+    return res.json({
+      success: true,
+      data: userData,
+      user: userData,
+    });
   } catch (err) {
     console.error("Error fetching user by id:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal server error" });
   }
 });
 
@@ -80,12 +96,14 @@ router.put("/users/:id", requireUser, async (req: Request, res: Response) => {
   const { id } = req.params;
 
   if (!id) {
-    return res.status(400).json({ error: "User id required" });
+    return res
+      .status(400)
+      .json({ success: false, error: "User id required" });
   }
 
   const auth = req.auth;
   if (!auth || auth.sub !== id) {
-    return res.status(403).json({ error: "Forbidden" });
+    return res.status(403).json({ success: false, error: "Forbidden" });
   }
 
   const {
@@ -125,7 +143,9 @@ router.put("/users/:id", requireUser, async (req: Request, res: Response) => {
   }
 
   if (Object.keys(data).length === 0) {
-    return res.status(400).json({ error: "No fields to update" });
+    return res
+      .status(400)
+      .json({ success: false, error: "No fields to update" });
   }
 
   try {
@@ -157,23 +177,24 @@ router.put("/users/:id", requireUser, async (req: Request, res: Response) => {
       },
     });
 
-    const userData = {
-      ...updated,
-      interests: updated.interests ?? [],
-      createdAt: updated.createdAt.toISOString(),
-      updatedAt: updated.updatedAt.toISOString(),
-      lastLogin: updated.lastLogin?.toISOString() ?? null,
-      _count: { eventsAttended: 0, eventsOrganized: 0, connections: 0 },
-    };
+    const userData = serializeUser(updated);
 
-    return res.json({ user: userData });
+    return res.json({
+      success: true,
+      data: userData,
+      user: userData,
+    });
   } catch (err: any) {
     // eslint-disable-next-line no-console
     console.error("Error updating user profile:", err);
     if (err.code === "P2025") {
-      return res.status(404).json({ error: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, error: "User not found" });
     }
-    return res.status(500).json({ error: "Internal server error" });
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal server error" });
   }
 });
 
@@ -186,7 +207,9 @@ router.get("/users/:id/connections", async (req: Request, res: Response) => {
   const { id } = req.params;
 
   if (!id) {
-    return res.status(400).json({ error: "User id required" });
+    return res
+      .status(400)
+      .json({ success: false, error: "User id required" });
   }
 
   try {
@@ -197,7 +220,9 @@ router.get("/users/:id/connections", async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res.status(404).json({ error: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, error: "User not found" });
     }
 
     const others = await prisma.user.findMany({
@@ -235,11 +260,452 @@ router.get("/users/:id/connections", async (req: Request, res: Response) => {
       isOnline: false,
     }));
 
-    return res.json({ connections });
+    return res.json({
+      success: true,
+      data: connections,
+      connections,
+    });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("Error fetching user connections:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/users/:id/interested-events
+ * Used by calendar, past-events, and events-section to show a user's followed/saved events.
+ */
+router.get(
+  "/users/:id/interested-events",
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    if (!id) {
+      return res
+        .status(400)
+        .json({ success: false, error: "User id required" });
+    }
+
+    try {
+      const saved = await prisma.savedEvent.findMany({
+        where: { userId: id },
+        include: {
+          event: {
+            include: {
+              ticketTypes: true,
+            },
+          },
+        },
+        orderBy: { savedAt: "desc" },
+      });
+
+      const events = saved
+        .map((s) => s.event)
+        .filter((e): e is NonNullable<typeof e> => Boolean(e));
+
+      return res.json({
+        success: true,
+        data: events,
+        events,
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("Error fetching interested events:", err);
+      return res
+        .status(500)
+        .json({ success: false, error: "Internal server error" });
+    }
+  }
+);
+
+/**
+ * GET /api/users/:id/saved-events
+ * Saved events timeline in visitor dashboard.
+ */
+router.get("/users/:id/saved-events", async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  if (!id) {
+    return res
+      .status(400)
+      .json({ success: false, error: "User id required" });
+  }
+
+  try {
+    const saved = await prisma.savedEvent.findMany({
+      where: { userId: id },
+      include: {
+        event: {
+          include: {
+            ticketTypes: true,
+          },
+        },
+      },
+      orderBy: { savedAt: "desc" },
+    });
+
+    const events = saved
+      .map((s) => s.event)
+      .filter((e): e is NonNullable<typeof e> => Boolean(e));
+
+    return res.json({
+      success: true,
+      data: events,
+      events,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Error fetching saved events:", err);
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/users/:id/events
+ * Generic events list for a user – for now this mirrors "interested events".
+ */
+router.get("/users/:id/events", async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  if (!id) {
+    return res
+      .status(400)
+      .json({ success: false, error: "User id required" });
+  }
+
+  try {
+    const registrations = await prisma.eventRegistration.findMany({
+      where: { userId: id },
+      include: {
+        event: {
+          include: {
+            ticketTypes: true,
+          },
+        },
+      },
+      orderBy: { registeredAt: "desc" },
+    });
+
+    const events = registrations
+      .map((r) => r.event)
+      .filter((e): e is NonNullable<typeof e> => Boolean(e));
+
+    return res.json({
+      success: true,
+      data: events,
+      events,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Error fetching user events:", err);
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/users/:id/appointments
+ * Visitor "My Appointments" – currently stubbed until Appointment model exists.
+ */
+router.get("/users/:id/appointments", async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  if (!id) {
+    return res
+      .status(400)
+      .json({ success: false, error: "User id required" });
+  }
+
+  try {
+    // TODO: implement real visitor appointments once Appointment model exists.
+    const appointments: any[] = [];
+
+    return res.json({
+      success: true,
+      data: appointments,
+      appointments,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Error fetching user appointments:", err);
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/users/:id/messages
+ * Basic stub so visitor messaging UI does not crash.
+ */
+router.get("/users/:id/messages", async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  if (!id) {
+    return res
+      .status(400)
+      .json({ success: false, error: "User id required" });
+  }
+
+  try {
+    // TODO: back this with a Message model/conversation system.
+    const messages: any[] = [];
+    return res.json({
+      success: true,
+      data: messages,
+      messages,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Error fetching user messages:", err);
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal server error" });
+  }
+});
+
+/**
+ * POST /api/users/:id/messages
+ * Stub create endpoint – echoes the payload for now.
+ */
+router.post("/users/:id/messages", async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  if (!id) {
+    return res
+      .status(400)
+      .json({ success: false, error: "User id required" });
+  }
+
+  try {
+    const body = req.body ?? {};
+    const message = {
+      id: "stub-message-id",
+      userId: id,
+      ...body,
+      createdAt: new Date().toISOString(),
+    };
+
+    return res.status(201).json({
+      success: true,
+      data: message,
+      message,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Error creating user message:", err);
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/users/search
+ * Simple user search used by connections-section to "find people".
+ */
+router.get("/users/search", async (req: Request, res: Response) => {
+  const q = String(req.query.q ?? "").trim();
+
+  if (!q) {
+    return res.json({ success: true, data: [], users: [] });
+  }
+
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { firstName: { contains: q, mode: "insensitive" } },
+          { lastName: { contains: q, mode: "insensitive" } },
+          { email: { contains: q, mode: "insensitive" } },
+          { company: { contains: q, mode: "insensitive" } },
+          { jobTitle: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        avatar: true,
+        company: true,
+        jobTitle: true,
+      },
+      take: 50,
+      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+    });
+
+    return res.json({
+      success: true,
+      data: users,
+      users,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Error searching users:", err);
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/notifications
+ * Global notifications feed for the current user – stubbed for now.
+ */
+router.get("/notifications", async (_req: Request, res: Response) => {
+  try {
+    const notifications: any[] = [];
+    return res.json({
+      success: true,
+      data: notifications,
+      notifications,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Error fetching notifications:", err);
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/settings
+ * Backend counterpart to user settings – returns safe defaults.
+ */
+router.get("/settings", async (req: Request, res: Response) => {
+  try {
+    const auth = req.auth;
+    const userId = auth?.sub;
+
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ success: false, error: "Unauthorized" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        role: true,
+        isVerified: true,
+        emailVerified: true,
+        phoneVerified: true,
+      },
+    });
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, error: "User not found" });
+    }
+
+    const settings = {
+      profileVisibility: "public",
+      phoneNumber: user.phone ?? "",
+      email: user.email ?? "",
+      introduceMe: true,
+      emailNotifications: true,
+      eventReminders: true,
+      newMessages: true,
+      connectionRequests: true,
+      isVerified: user.isVerified,
+      emailVerified: user.emailVerified,
+      phoneVerified: user.phoneVerified,
+      role: user.role,
+    };
+
+    return res.json({
+      success: true,
+      data: settings,
+      settings,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Error fetching settings (backend):", err);
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal server error" });
+  }
+});
+
+/**
+ * PATCH /api/settings
+ * Stub update – echoes merged settings back to the client.
+ */
+router.patch("/settings", async (req: Request, res: Response) => {
+  try {
+    const auth = req.auth;
+    const userId = auth?.sub;
+
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ success: false, error: "Unauthorized" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        role: true,
+        isVerified: true,
+        emailVerified: true,
+        phoneVerified: true,
+      },
+    });
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, error: "User not found" });
+    }
+
+    const base = {
+      profileVisibility: "public",
+      phoneNumber: user.phone ?? "",
+      email: user.email ?? "",
+      introduceMe: true,
+      emailNotifications: true,
+      eventReminders: true,
+      newMessages: true,
+      connectionRequests: true,
+      isVerified: user.isVerified,
+      emailVerified: user.emailVerified,
+      phoneVerified: user.phoneVerified,
+      role: user.role,
+    };
+
+    const body = req.body ?? {};
+    const merged = {
+      ...base,
+      ...body,
+    };
+
+    return res.json({
+      success: true,
+      data: merged,
+      settings: merged,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Error updating settings (backend):", err);
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal server error" });
   }
 });
 

@@ -299,6 +299,12 @@ model User {
   reviews           Review[]
   leads             EventLead[]
 
+  // Venue appointments (as venue manager)
+  venueAppointments VenueAppointment[] @relation("VenueAppointmentVenue")
+
+  // Venue appointments (as visitor/requester)
+  visitorAppointments VenueAppointment[] @relation("VenueAppointmentVisitor")
+
   @@map("users")
 }
 
@@ -614,4 +620,38 @@ model EventAnalytics {
   createdAt DateTime @default(now())
 
   @@map("event_analytics")
+}
+
+// ─── Venue Appointments ───────────────────────────────────────────────────────
+model VenueAppointment {
+  id        String   @id @default(uuid()) @db.Uuid
+
+  // The venue manager (User with role VENUE_MANAGER) this appointment is for
+  venueId   String   @db.Uuid
+  venue     User     @relation("VenueAppointmentVenue", fields: [venueId], references: [id])
+
+  // The visitor (User) who requested the appointment, optional for now
+  visitorId String?  @db.Uuid
+  visitor   User?    @relation("VenueAppointmentVisitor", fields: [visitorId], references: [id])
+
+  requestedDate DateTime
+  requestedTime String
+  duration      Int       @default(30) // minutes
+
+  purpose   String?
+  notes     String?
+  location  String?
+  meetingLink String?
+
+  type     String   @default("VENUE_TOUR")
+  status   String   @default("PENDING")   // PENDING | CONFIRMED | COMPLETED | CANCELLED
+  priority String   @default("MEDIUM")    // LOW | MEDIUM | HIGH
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([venueId])
+  @@index([visitorId])
+  @@index([status])
+  @@map("venue_appointments")
 }

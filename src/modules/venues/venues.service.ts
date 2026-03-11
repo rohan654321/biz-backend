@@ -123,3 +123,119 @@ export async function getVenueEvents(id: string) {
   };
 }
 
+export async function listVenueReviews(venueId: string) {
+  if (!venueId) {
+    throw new Error("Invalid venue ID");
+  }
+
+  let reviews: any[] = [];
+  try {
+    reviews = await prisma.review.findMany({
+      where: {
+        venueId,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  } catch (err: any) {
+    // If existing data has invalid UUIDs (legacy rows), avoid crashing the
+    // whole endpoint; log and return an empty list instead.
+    // eslint-disable-next-line no-console
+    console.error("Error loading venue reviews; returning empty list:", err);
+    return [];
+  }
+
+  const shaped = reviews.map((review) => ({
+    id: review.id,
+    rating: review.rating ?? 0,
+    title: "", // no separate title in schema
+    comment: review.comment ?? "",
+    createdAt: review.createdAt.toISOString(),
+    user: review.user && {
+      id: review.user.id,
+      firstName: review.user.firstName,
+      lastName: review.user.lastName,
+      avatar: review.user.avatar ?? null,
+    },
+  }));
+
+  return shaped;
+}
+
+export async function createVenueReview(params: {
+  venueId: string;
+  userId: string;
+  rating: number;
+  comment: string;
+  title?: string | null;
+}) {
+  const { venueId, userId, rating, comment } = params;
+
+  if (!venueId || !userId) {
+    throw new Error("venueId and userId are required");
+  }
+  if (!rating || rating < 1 || rating > 5) {
+    throw new Error("Rating must be between 1 and 5");
+  }
+
+  const review = await prisma.review.create({
+    data: {
+      userId,
+      venueId,
+      rating,
+      comment,
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+        },
+      },
+    },
+  });
+
+  // recompute aggregates
+  const all = await prisma.review.findMany({
+    where: { venueId, rating: { not: null } },
+  });
+  const totalReviews = all.length;
+  const avg =
+    totalReviews === 0
+      ? 0
+      : all.reduce((sum, r) => sum + (r.rating ?? 0), 0) / totalReviews;
+
+  await prisma.user.update({
+    where: { id: venueId },
+    data: {
+      averageRating: Math.round(avg * 10) / 10,
+      totalReviews,
+    },
+  });
+
+  return {
+    id: review.id,
+    rating: review.rating ?? 0,
+    title: "",
+    comment: review.comment ?? "",
+    createdAt: review.createdAt.toISOString(),
+    user: review.user && {
+      id: review.user.id,
+      firstName: review.user.firstName,
+      lastName: review.user.lastName,
+      avatar: review.user.avatar ?? null,
+    },
+  };
+}
+

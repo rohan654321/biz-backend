@@ -1,4 +1,82 @@
 import prisma from "../../config/prisma";
+import { EventStatus } from "@prisma/client";
+
+export async function listAdminEvents() {
+  const events = await prisma.event.findMany({
+    orderBy: { createdAt: "desc" },
+  });
+  return events;
+}
+
+interface UpdateAdminEventParams {
+  id: string;
+  statusLabel?: string;
+  featured?: boolean;
+  vip?: boolean;
+  isVerified?: boolean;
+  adminEmail?: string | null;
+}
+
+export async function updateAdminEvent(params: UpdateAdminEventParams) {
+  const { id, statusLabel, featured, vip, isVerified, adminEmail } = params;
+
+  const data: any = {};
+
+  if (typeof featured === "boolean") {
+    data.isFeatured = featured;
+  }
+
+  if (typeof vip === "boolean") {
+    data.isVIP = vip;
+  }
+
+  if (typeof isVerified === "boolean") {
+    data.isVerified = isVerified;
+    if (isVerified) {
+      data.verifiedAt = new Date();
+      data.verifiedBy = adminEmail ?? "Admin";
+      if (!data.verifiedBadgeImage) {
+        data.verifiedBadgeImage = "/badge/VerifiedBADGE (1).png";
+      }
+    } else {
+      data.verifiedAt = null;
+      data.verifiedBy = null;
+      data.verifiedBadgeImage = null;
+    }
+  }
+
+  if (statusLabel) {
+    let mapped: EventStatus;
+    switch (statusLabel) {
+      case "Approved":
+        mapped = EventStatus.PUBLISHED;
+        break;
+      case "Pending Review":
+        mapped = EventStatus.PENDING_APPROVAL;
+        break;
+      case "Rejected":
+        mapped = EventStatus.REJECTED;
+        break;
+      case "Draft":
+        mapped = EventStatus.DRAFT;
+        break;
+      case "Flagged":
+        mapped = EventStatus.CANCELLED;
+        break;
+      default:
+        mapped = EventStatus.DRAFT;
+        break;
+    }
+    data.status = mapped;
+  }
+
+  const event = await prisma.event.update({
+    where: { id },
+    data,
+  });
+
+  return event;
+}
 
 export interface AdminListEventsParams {
   page?: number;

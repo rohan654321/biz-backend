@@ -91,7 +91,16 @@ export async function adminGetEventByIdHandler(req: Request, res: Response) {
 export async function adminUpdateEventHandler(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const body = req.body ?? {};
+    const body = { ...(req.body ?? {}) } as any;
+
+    // Map frontend flags to Prisma fields
+    if (typeof body.featured === "boolean") {
+      body.isFeatured = body.featured;
+    }
+    if (typeof body.vip === "boolean") {
+      body.isVIP = body.vip;
+    }
+
     if (body.isVerified === true && !body.verifiedBy && req.auth?.sub) {
       body.verifiedBy = req.auth.sub;
     }

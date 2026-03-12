@@ -196,6 +196,9 @@ export async function adminListEvents(params: AdminListEventsParams) {
     rejectionReason: event.rejectionReason ?? undefined,
     rejectedAt: event.rejectedAt?.toISOString(),
     rejectedBy: event.rejectedBy ?? undefined,
+    isFeatured: event.isFeatured ?? false,
+    isVIP: event.isVIP ?? false,
+    isPublic: event.isPublic ?? true,
   }));
 
   return {

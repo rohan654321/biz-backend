@@ -16,6 +16,17 @@ function extractTokenFromHeader(req: Request): string | null {
   return token;
 }
 
+/** Allow either JWT or X-Internal-Secret (for Next.js server-to-backend calls). */
+export function requireUserOrInternal(req: Request, res: Response, next: NextFunction) {
+  const secret = process.env.INTERNAL_API_SECRET;
+  const provided = req.headers["x-internal-secret"];
+  if (secret && provided === secret) {
+    req.auth = { sub: "internal", email: "internal@server", role: "USER", domain: "USER" } as AuthTokenPayload;
+    return next();
+  }
+  return requireUser(req, res, next);
+}
+
 export function requireUser(req: Request, res: Response, next: NextFunction) {
   try {
     const token = extractTokenFromHeader(req);

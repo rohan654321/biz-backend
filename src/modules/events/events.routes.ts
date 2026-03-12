@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   getEventsHandler,
   getEventByIdHandler,
+  patchEventByIdHandler,
   getFeaturedEventsHandler,
   getEventsStatsHandler,
   searchHandler,
@@ -23,7 +24,7 @@ import {
   listSpeakerSessionsHandler,
   createSpeakerSessionHandler,
 } from "./events.controller";
-import { requireUser } from "../../middleware/auth.middleware";
+import { requireUser, requireUserOrInternal } from "../../middleware/auth.middleware";
 
 const router = Router();
 
@@ -44,6 +45,8 @@ router.get("/events/stats", getEventsStatsHandler);
 
 // Single event by id / slug / title
 router.get("/events/:id", getEventByIdHandler);
+// Partial update (description, tags, images, brochure, layoutPlan) — JWT or X-Internal-Secret
+router.patch("/events/:id", requireUserOrInternal, patchEventByIdHandler);
 
 // Event sub-resources (leads, exhibitors, speakers, brochure, layout, space-costs)
 router.get("/events/:id/leads", getEventLeadsHandler);

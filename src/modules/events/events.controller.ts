@@ -18,6 +18,7 @@ import {
   listEventSpeakers,
   getEventBrochureAndDocuments,
   updateEventLayoutPlan,
+  updateEventFields,
   listEventSpaceCosts,
   listSpeakerSessions,
   createEventLead,
@@ -96,6 +97,29 @@ export async function getEventByIdHandler(req: Request, res: Response) {
     // eslint-disable-next-line no-console
     console.error("Error fetching event (backend):", error);
     return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+export async function patchEventByIdHandler(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const body = (req.body ?? {}) as {
+      description?: string;
+      tags?: string[];
+      images?: string[];
+      brochure?: string | null;
+      layoutPlan?: string | null;
+    };
+
+    const updated = await updateEventFields(id, body);
+    if (!updated) {
+      return res.status(404).json({ success: false, error: "Event not found" });
+    }
+    return res.json(updated);
+  } catch (error: any) {
+    // eslint-disable-next-line no-console
+    console.error("Error patching event (backend):", error);
+    return res.status(500).json({ success: false, error: "Internal server error" });
   }
 }
 

@@ -334,6 +334,22 @@ export async function getEventByIdentifier(id: string) {
 
   const slug = event.slug || generateSlug(event.title);
 
+  // Map venue to frontend shape (event-dashboard expects company, bio, location, website, amenities)
+  const venue = event.venue
+    ? {
+        id: event.venue.id,
+        company: event.venue.company ?? event.venue.organizationName ?? event.venue.venueName ?? "",
+        bio: event.venue.bio ?? event.venue.venueDescription ?? "",
+        location:
+          ([event.venue.venueAddress, event.venue.venueCity, event.venue.venueState, event.venue.venueCountry]
+            .filter(Boolean)
+            .join(", ") ||
+            event.venue.location) ?? "",
+        website: event.venue.venueWebsite ?? event.venue.website ?? "",
+        amenities: event.venue.amenities ?? [],
+      }
+    : null;
+
   const data = {
     ...event,
     title: event.title || "Untitled Event",
@@ -344,6 +360,7 @@ export async function getEventByIdentifier(id: string) {
     reviewCount: event._count?.reviews ?? 0,
     layoutPlan: event.layoutPlan,
     slug,
+    venue,
     metadata: {
       title: event.title,
       description: event.description || event.shortDescription,
@@ -867,6 +884,54 @@ export async function updateEventLayoutPlan(eventId: string, layoutPlan: string 
   });
 
   return updated;
+}
+
+/** Partial update for event (description, tags, images, brochure, layoutPlan). Used by event-dashboard and Next.js proxy. */
+export async function updateEventFields(
+  eventId: string,
+  body: {
+    description?: string;
+    tags?: string[];
+    images?: string[];
+    brochure?: string | null;
+    layoutPlan?: string | null;
+  }
+) {
+  const existing = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { id: true },
+  });
+
+  if (!existing) {
+    return null;
+  }
+
+  const data: Record<string, unknown> = {};
+  if (typeof body.description === "string") data.description = body.description;
+  if (Array.isArray(body.tags)) data.tags = body.tags;
+  if (Array.isArray(body.images)) data.images = body.images;
+  if (body.brochure !== undefined) data.brochure = body.brochure;
+  if (body.layoutPlan !== undefined) data.layoutPlan = body.layoutPlan;
+
+  if (Object.keys(data).length === 0) {
+    return prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, description: true, tags: true, images: true, brochure: true, layoutPlan: true },
+    });
+  }
+
+  return prisma.event.update({
+    where: { id: eventId },
+    data,
+    select: {
+      id: true,
+      description: true,
+      tags: true,
+      images: true,
+      brochure: true,
+      layoutPlan: true,
+    },
+  });
 }
 
 export async function listEventSpaceCosts(eventId: string) {

@@ -178,19 +178,21 @@ export async function createEventAdmin(params: CreateEventAdminParams) {
 
   let venueId: string | null = null;
   if (body.venueId) {
-    venueId = body.venueId;
-  } else if (body.venueName || body.city || body.address) {
-    const venue = await findOrCreateUser({
-      email: body.venueEmail || `venue-${Date.now()}@eventify.com`,
-      firstName: "Venue",
-      lastName: "Manager",
-      role: "VENUE_MANAGER",
-      venueName: body.venueName || body.venue,
-      venueCity: body.city,
-      venueAddress: body.address,
-      phone: body.venuePhone,
+    const existingVenue = await prisma.user.findFirst({
+      where: {
+        id: body.venueId,
+        role: "VENUE_MANAGER",
+      },
     });
-    venueId = venue.id;
+
+    if (!existingVenue) {
+      return { error: "VENUE_INVALID" as const };
+    }
+
+    venueId = existingVenue.id;
+  } else if (body.venueName || body.city || body.address || body.venueEmail) {
+    // Do not auto-create venues anymore. Require explicit venueId selection.
+    return { error: "VENUE_REQUIRED" as const };
   }
 
   const speakerSessionsData = Array.isArray(body.speakerSessions) ? body.speakerSessions : [];

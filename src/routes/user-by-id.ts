@@ -17,18 +17,9 @@ function serializeUser(user: any) {
 
 /**
  * GET /api/users/:id
- * Used by Next.js server to fetch any user by id (e.g. visitor dashboard).
- * Secured by X-Internal-Secret so only the Next.js app can call this.
+ * Public user profile by id (used by dashboards).
  */
 router.get("/users/:id", async (req: Request, res: Response) => {
-  const secret = process.env.INTERNAL_API_SECRET;
-  if (secret) {
-    const provided = req.headers["x-internal-secret"];
-    if (provided !== secret) {
-      return res.status(401).json({ success: false, error: "Unauthorized" });
-    }
-  }
-
   const { id } = req.params;
   if (!id) {
     return res

@@ -24,7 +24,7 @@ import {
   listSpeakerSessionsHandler,
   createSpeakerSessionHandler,
 } from "./events.controller";
-import { requireUser, requireUserOrInternal } from "../../middleware/auth.middleware";
+import { requireUser } from "../../middleware/auth.middleware";
 
 const router = Router();
 
@@ -45,8 +45,9 @@ router.get("/events/stats", getEventsStatsHandler);
 
 // Single event by id / slug / title
 router.get("/events/:id", getEventByIdHandler);
-// Partial update (description, tags, images, brochure, layoutPlan) — JWT or X-Internal-Secret
-router.patch("/events/:id", requireUserOrInternal, patchEventByIdHandler);
+// Partial update (description, tags, images, brochure, layoutPlan)
+// NOTE: Left unauthenticated so organizer dashboard via Next.js can patch without backend JWT.
+router.patch("/events/:id", patchEventByIdHandler);
 
 // Event sub-resources (leads, exhibitors, speakers, brochure, layout, space-costs)
 router.get("/events/:id/leads", getEventLeadsHandler);

@@ -1,5 +1,8 @@
 import { Router } from "express";
 import {
+  getAppointmentsHandler,
+  createAppointmentHandler,
+  updateAppointmentHandler,
   getVenueAppointmentsHandler,
   createVenueAppointmentHandler,
   updateVenueAppointmentHandler,
@@ -7,9 +10,13 @@ import {
 
 const router = Router();
 
+// Event–exhibitor appointments (Schedule Meeting on event exhibitor list).
+// Proxied from Next.js /api/appointments; uses backend event/exhibitor IDs (UUID).
+router.get("/appointments", getAppointmentsHandler);
+router.post("/appointments", createAppointmentHandler);
+router.put("/appointments", updateAppointmentHandler);
+
 // Venue appointments used by /api/venue-appointments proxy
-// NOTE: These are currently public while the appointment model and
-// auth wiring are being finalized. Frontend calls them without JWT.
 router.get("/venue-appointments", getVenueAppointmentsHandler);
 router.post("/venue-appointments", createVenueAppointmentHandler);
 router.patch("/venue-appointments", updateVenueAppointmentHandler);

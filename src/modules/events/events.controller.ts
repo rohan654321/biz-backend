@@ -22,6 +22,11 @@ import {
   listEventSpaceCosts,
   listSpeakerSessions,
   createEventLead,
+  listExhibitionSpaces,
+  createExhibitionSpace,
+  updateExhibitionSpace,
+  addExhibitorToEvent,
+  removeExhibitorFromEvent,
 } from "./events.service";
 import { createEventAdmin, createSpeakerSession } from "./events-writes.service";
 
@@ -282,9 +287,23 @@ export async function listSpeakerSessionsHandler(req: Request, res: Response) {
       speakerId: (speakerId as string | undefined) ?? null,
     });
 
+    // Serialize for JSON (e.g. Date -> ISO string)
+    const serialized = sessions.map((s: any) => ({
+      ...s,
+      startTime: s.startTime instanceof Date ? s.startTime.toISOString() : s.startTime,
+      endTime: s.endTime instanceof Date ? s.endTime.toISOString() : s.endTime,
+      event: s.event
+        ? {
+            ...s.event,
+            startDate: s.event.startDate instanceof Date ? s.event.startDate.toISOString() : s.event.startDate,
+            endDate: s.event.endDate instanceof Date ? s.event.endDate.toISOString() : s.event.endDate,
+          }
+        : null,
+    }));
+
     return res.json({
       success: true,
-      sessions,
+      sessions: serialized,
     });
   } catch (error: any) {
     // eslint-disable-next-line no-console
@@ -292,7 +311,8 @@ export async function listSpeakerSessionsHandler(req: Request, res: Response) {
     return res.status(500).json({
       success: false,
       error: "Failed to list speaker sessions",
-      details: error.message,
+      details: error?.message,
+      sessions: [],
     });
   }
 }
@@ -403,6 +423,119 @@ export async function getEventSpaceCostsHandler(req: Request, res: Response) {
     return res.status(500).json({
       success: false,
       error: "Failed to fetch event space costs",
+      details: error.message,
+    });
+  }
+}
+
+export async function getExhibitionSpacesHandler(req: Request, res: Response) {
+  try {
+    const { id: eventId } = req.params;
+    const exhibitionSpaces = await listExhibitionSpaces(eventId);
+    return res.json({ exhibitionSpaces });
+  } catch (error: any) {
+    // eslint-disable-next-line no-console
+    console.error("Error fetching exhibition spaces (backend):", error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to fetch exhibition spaces",
+      details: error.message,
+    });
+  }
+}
+
+export async function createExhibitionSpaceHandler(req: Request, res: Response) {
+  try {
+    const { id: eventId } = req.params;
+    const result = await createExhibitionSpace(eventId, req.body ?? {});
+    if ("error" in result) {
+      if (result.error === "NOT_FOUND") {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      if (result.error === "NAME_REQUIRED") {
+        return res.status(400).json({ error: "name is required" });
+      }
+      return res.status(400).json({ error: "Bad request" });
+    }
+    return res.status(201).json(result);
+  } catch (error: any) {
+    // eslint-disable-next-line no-console
+    console.error("Error creating exhibition space (backend):", error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to create exhibition space",
+      details: error.message,
+    });
+  }
+}
+
+export async function updateExhibitionSpaceHandler(req: Request, res: Response) {
+  try {
+    const { id: eventId, spaceId } = req.params;
+    const updated = await updateExhibitionSpace(eventId, spaceId, req.body ?? {});
+    if (!updated) {
+      return res.status(404).json({ error: "Exhibition space not found" });
+    }
+    return res.json(updated);
+  } catch (error: any) {
+    // eslint-disable-next-line no-console
+    console.error("Error updating exhibition space (backend):", error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to update exhibition space",
+      details: error.message,
+    });
+  }
+}
+
+export async function addExhibitorToEventHandler(req: Request, res: Response) {
+  try {
+    const { id: eventId } = req.params;
+    const result = await addExhibitorToEvent(eventId, req.body ?? {});
+    if ("error" in result) {
+      if (result.error === "EVENT_NOT_FOUND") {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      if (result.error === "EXHIBITOR_NOT_FOUND") {
+        return res.status(404).json({ error: "Exhibitor not found" });
+      }
+      if (result.error === "SPACE_NOT_FOUND") {
+        return res.status(404).json({ error: "Exhibition space not found" });
+      }
+      if (result.error === "ALREADY_REGISTERED") {
+        return res.status(409).json({ error: "Exhibitor is already registered for this event" });
+      }
+      return res.status(400).json({ error: "Bad request" });
+    }
+    return res.status(201).json(result.booth);
+  } catch (error: any) {
+    // eslint-disable-next-line no-console
+    console.error("Error adding exhibitor to event (backend):", error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to add exhibitor to event",
+      details: error.message,
+    });
+  }
+}
+
+export async function removeExhibitorFromEventHandler(req: Request, res: Response) {
+  try {
+    const { id: eventId, exhibitorId } = req.params;
+    if (!exhibitorId) {
+      return res.status(400).json({ error: "Exhibitor ID required" });
+    }
+    const removed = await removeExhibitorFromEvent(eventId, exhibitorId);
+    if (!removed) {
+      return res.status(404).json({ error: "Exhibitor not found for this event" });
+    }
+    return res.status(200).json({ success: true });
+  } catch (error: any) {
+    // eslint-disable-next-line no-console
+    console.error("Error removing exhibitor from event (backend):", error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to remove exhibitor from event",
       details: error.message,
     });
   }

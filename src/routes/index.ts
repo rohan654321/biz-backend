@@ -10,6 +10,7 @@ import exhibitorsRouter from "../modules/exhibitors/exhibitors.routes";
 import venuesRouter from "../modules/venues/venues.routes";
 import speakersRouter from "../modules/speakers/speakers.routes";
 import appointmentsRouter from "../modules/appointments/appointments.routes";
+import conferencesRouter from "../modules/conferences/conferences.routes";
 
 const router = Router();
 
@@ -55,6 +56,9 @@ router.use("/", speakersRouter);
 
 // Appointments routes (venue appointments, etc.)
 router.use("/", appointmentsRouter);
+
+// Conferences (event agenda / conference agenda)
+router.use("/", conferencesRouter);
 
 export default router;
 

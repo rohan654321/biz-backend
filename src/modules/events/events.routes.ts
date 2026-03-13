@@ -23,6 +23,11 @@ import {
   getEventSpaceCostsHandler,
   listSpeakerSessionsHandler,
   createSpeakerSessionHandler,
+  getExhibitionSpacesHandler,
+  createExhibitionSpaceHandler,
+  updateExhibitionSpaceHandler,
+  addExhibitorToEventHandler,
+  removeExhibitorFromEventHandler,
 } from "./events.controller";
 import { requireUser } from "../../middleware/auth.middleware";
 
@@ -43,6 +48,10 @@ router.get("/events/featured", getFeaturedEventsHandler);
 // Events stats (categories, cities, countries)
 router.get("/events/stats", getEventsStatsHandler);
 
+// Global speaker sessions (must be before /events/:id so "speakers" is not matched as :id)
+router.get("/events/speakers", listSpeakerSessionsHandler);
+router.post("/events/speakers", requireUser, createSpeakerSessionHandler);
+
 // Single event by id / slug / title
 router.get("/events/:id", getEventByIdHandler);
 // Partial update (description, tags, images, brochure, layoutPlan)
@@ -59,9 +68,14 @@ router.put("/events/:id/layout", requireUser, updateEventLayoutHandler);
 router.delete("/events/:id/layout", requireUser, deleteEventLayoutHandler);
 router.get("/events/:id/space-costs", getEventSpaceCostsHandler);
 
-// Global speaker sessions listing / creation
-router.get("/events/speakers", listSpeakerSessionsHandler);
-router.post("/events/speakers", requireUser, createSpeakerSessionHandler);
+// Exhibition spaces (list, create, update) — for Event Info Space Cost tab & Add Exhibitor
+router.get("/events/:id/exhibition-spaces", getExhibitionSpacesHandler);
+router.post("/events/:id/exhibition-spaces", createExhibitionSpaceHandler);
+router.put("/events/:id/exhibition-spaces/:spaceId", updateExhibitionSpaceHandler);
+
+// Add exhibitor to event (create booth); remove exhibitor from event
+router.post("/events/:id/exhibitors", addExhibitorToEventHandler);
+router.delete("/events/:id/exhibitors/:exhibitorId", removeExhibitorFromEventHandler);
 
 // Save / unsave event (user only)
 router.post("/events/:id/save", requireUser, saveEventHandler);

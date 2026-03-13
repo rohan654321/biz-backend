@@ -101,6 +101,182 @@ export async function getSpeakerById(id: string) {
   return profile;
 }
 
+// Create a new speaker (event dashboard "Create new speaker")
+export async function createSpeaker(body: Record<string, unknown>) {
+  const {
+    firstName,
+    lastName,
+    email,
+    phone,
+    bio,
+    company,
+    jobTitle,
+    location,
+    website,
+    linkedin,
+    twitter,
+    specialties,
+    achievements,
+    certifications,
+    speakingExperience,
+    avatar,
+  } = body as {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+    bio?: string;
+    company?: string;
+    jobTitle?: string;
+    location?: string;
+    website?: string;
+    linkedin?: string;
+    twitter?: string;
+    specialties?: string[];
+    achievements?: string[];
+    certifications?: string[];
+    speakingExperience?: string;
+    avatar?: string;
+  };
+
+  if (!firstName || !lastName || !email) {
+    throw new Error("First name, last name, and email are required");
+  }
+
+  const existing = await prisma.user.findFirst({
+    where: { email: email.trim(), role: "SPEAKER" },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new Error("Speaker with this email already exists");
+  }
+
+  const speaker = await prisma.user.create({
+    data: {
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      email: email.trim(),
+      phone: phone?.trim() ?? null,
+      bio: bio?.trim() ?? null,
+      company: company?.trim() ?? null,
+      jobTitle: jobTitle?.trim() ?? null,
+      location: location?.trim() ?? null,
+      website: website?.trim() ?? null,
+      linkedin: linkedin?.trim() ?? null,
+      twitter: twitter?.trim() ?? null,
+      specialties: Array.isArray(specialties) ? specialties : [],
+      achievements: Array.isArray(achievements) ? achievements : [],
+      certifications: Array.isArray(certifications) ? certifications : [],
+      speakingExperience: speakingExperience?.trim() ?? null,
+      avatar: avatar?.trim() ?? null,
+      role: "SPEAKER",
+    },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+      avatar: true,
+      bio: true,
+      company: true,
+      jobTitle: true,
+      location: true,
+      website: true,
+      linkedin: true,
+      twitter: true,
+      specialties: true,
+      achievements: true,
+      certifications: true,
+      speakingExperience: true,
+    },
+  });
+
+  return speaker;
+}
+
+// Update speaker profile (dashboard save)
+export async function updateSpeakerProfile(
+  id: string,
+  body: {
+    fullName?: string;
+    designation?: string;
+    company?: string;
+    email?: string;
+    phone?: string;
+    linkedin?: string;
+    website?: string;
+    location?: string;
+    bio?: string;
+    speakingExperience?: string;
+    avatar?: string;
+  }
+) {
+  const existing = await prisma.user.findUnique({
+    where: { id, role: "SPEAKER" },
+    select: { id: true },
+  });
+  if (!existing) {
+    return null;
+  }
+
+  const fullNameTrimmed = (body.fullName ?? "").trim();
+  const data: Record<string, unknown> = {};
+  if (fullNameTrimmed) {
+    const [firstName, ...lastNameParts] = fullNameTrimmed.split(" ");
+    data.firstName = firstName ?? undefined;
+    data.lastName = lastNameParts.join(" ").trim() || undefined;
+  }
+  if (body.designation !== undefined) data.jobTitle = body.designation;
+  if (body.company !== undefined) data.company = body.company;
+  if (body.email !== undefined) data.email = body.email;
+  if (body.phone !== undefined) data.phone = body.phone;
+  if (body.linkedin !== undefined) data.linkedin = body.linkedin;
+  if (body.website !== undefined) data.website = body.website;
+  if (body.location !== undefined) data.location = body.location;
+  if (body.bio !== undefined) data.bio = body.bio;
+  if (body.speakingExperience !== undefined) data.speakingExperience = body.speakingExperience;
+  if (body.avatar !== undefined) data.avatar = body.avatar;
+
+  if (Object.keys(data).length === 0) {
+    return getSpeakerById(id);
+  }
+
+  const updated = await prisma.user.update({
+    where: { id },
+    data,
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+      avatar: true,
+      bio: true,
+      company: true,
+      jobTitle: true,
+      location: true,
+      website: true,
+      linkedin: true,
+      speakingExperience: true,
+    },
+  });
+
+  return {
+    fullName: `${updated.firstName} ${updated.lastName}`.trim(),
+    designation: updated.jobTitle || "",
+    company: updated.company || "",
+    email: updated.email,
+    phone: updated.phone || "",
+    linkedin: updated.linkedin || "",
+    website: updated.website || "",
+    location: updated.location || "",
+    bio: updated.bio || "",
+    speakingExperience: updated.speakingExperience || "",
+    avatar: updated.avatar || undefined,
+  };
+}
+
 // Speaker events
 export async function getSpeakerEvents(id: string) {
   const speakerId = id;

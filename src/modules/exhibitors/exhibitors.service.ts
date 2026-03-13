@@ -31,13 +31,87 @@ export async function listExhibitors() {
   return exhibitors;
 }
 
-// Single exhibitor (read-only)
+/** Create a new exhibitor (User with role EXHIBITOR). */
+export async function createExhibitor(body: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  bio?: string;
+  company?: string;
+  jobTitle?: string;
+  location?: string;
+  website?: string;
+  linkedin?: string;
+  twitter?: string;
+  businessEmail?: string;
+  businessPhone?: string;
+  businessAddress?: string;
+  taxId?: string;
+}) {
+  const { firstName, lastName, email, company } = body;
+  if (!firstName?.trim() || !lastName?.trim() || !email?.trim() || !company?.trim()) {
+    return { error: "MISSING_FIELDS" as const, missing: ["firstName", "lastName", "email", "company"] };
+  }
+  const existing = await prisma.user.findUnique({
+    where: { email: email.trim() },
+    select: { id: true },
+  });
+  if (existing) {
+    return { error: "EMAIL_EXISTS" as const };
+  }
+  const exhibitor = await prisma.user.create({
+    data: {
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      email: email.trim(),
+      phone: body.phone?.trim() || null,
+      bio: body.bio?.trim() || null,
+      company: company.trim(),
+      jobTitle: body.jobTitle?.trim() || null,
+      location: body.location?.trim() || null,
+      website: body.website?.trim() || null,
+      linkedin: body.linkedin?.trim() || null,
+      twitter: body.twitter?.trim() || null,
+      businessEmail: body.businessEmail?.trim() || null,
+      businessPhone: body.businessPhone?.trim() || null,
+      businessAddress: body.businessAddress?.trim() || null,
+      taxId: body.taxId?.trim() || null,
+      role: "EXHIBITOR",
+      isActive: true,
+      isVerified: false,
+      password: "TEMP_PASSWORD",
+    },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+      avatar: true,
+      bio: true,
+      company: true,
+      jobTitle: true,
+      location: true,
+      website: true,
+      linkedin: true,
+      twitter: true,
+      businessEmail: true,
+      businessPhone: true,
+      businessAddress: true,
+      taxId: true,
+    },
+  });
+  return { exhibitor };
+}
+
+// Single exhibitor (read-only) – shape for public exhibitor page
 export async function getExhibitorById(id: string) {
   if (!id || id === "undefined") {
     throw new Error("Invalid exhibitor ID");
   }
 
-  const exhibitor = await prisma.user.findFirst({
+  const user = await prisma.user.findFirst({
     where: {
       id,
       role: "EXHIBITOR",
@@ -54,14 +128,45 @@ export async function getExhibitorById(id: string) {
       website: true,
       isVerified: true,
       createdAt: true,
+      company: true,
+      companyIndustry: true,
+      description: true,
+      organizationName: true,
+      headquarters: true,
+      founded: true,
+      teamSize: true,
+      specialties: true,
+      certifications: true,
+      businessEmail: true,
+      businessPhone: true,
+      businessAddress: true,
     },
   });
 
-  if (!exhibitor) {
+  if (!user) {
     return null;
   }
 
-  return exhibitor;
+  return {
+    id: user.id,
+    email: user.email ?? "",
+    firstName: user.firstName,
+    lastName: user.lastName,
+    phone: user.phone ?? undefined,
+    avatar: user.avatar ?? undefined,
+    bio: user.bio ?? user.description ?? undefined,
+    website: user.website ?? undefined,
+    isVerified: user.isVerified,
+    createdAt: user.createdAt.toISOString(),
+    companyName: user.company ?? user.organizationName ?? undefined,
+    companyLogo: user.avatar ?? undefined,
+    industry: user.companyIndustry ?? undefined,
+    companySize: user.teamSize ?? undefined,
+    foundedYear: user.founded ?? undefined,
+    headquarters: user.headquarters ?? undefined,
+    specialties: user.specialties ?? undefined,
+    certifications: user.certifications ?? undefined,
+  };
 }
 
 // Exhibitor analytics – currently mock data (preserve shape)
@@ -203,8 +308,14 @@ export async function getExhibitorEvents(exhibitorId: string) {
           description: true,
           startDate: true,
           endDate: true,
-          venue: true,
           status: true,
+          currency: true,
+          venue: {
+            select: {
+              venueName: true,
+              venueAddress: true,
+            },
+          },
           organizer: {
             select: {
               id: true,
@@ -227,26 +338,239 @@ export async function getExhibitorEvents(exhibitorId: string) {
     orderBy: { createdAt: "desc" },
   });
 
-  const events = booths.map((booth) => ({
-    id: booth.id,
-    eventId: booth.eventId,
-    eventName: booth.event.title,
-    date: booth.event.startDate.toISOString().split("T")[0],
-    endDate: booth.event.endDate.toISOString().split("T")[0],
-    venue: booth.event.venue || "TBD",
-    boothSize: `${booth.spaceId}`,
-    boothNumber: booth.boothNumber,
-    paymentStatus: booth.status === "BOOKED" ? "PAID" : "PENDING",
-    setupTime: "8:00 AM - 10:00 AM",
-    dismantleTime: "6:00 PM - 8:00 PM",
-    passes: 5,
-    passesUsed: 0,
-    invoiceAmount: booth.totalCost,
-    status: booth.event.status,
-    specialRequests: booth.specialRequests,
-    organizer: booth.event.organizer,
-  }));
+  const events = booths.map((booth) => {
+    const venue = booth.event.venue as { venueName?: string; venueAddress?: string } | null
+    const venueDisplay = venue?.venueName || venue?.venueAddress || "TBD"
+    const rawStart = booth.event.startDate as Date
+    const rawEnd = booth.event.endDate as Date
+    const startIso = rawStart instanceof Date ? rawStart.toISOString() : String(rawStart)
+    const endIso = rawEnd instanceof Date ? rawEnd.toISOString() : String(rawEnd)
+    return {
+      id: booth.id,
+      eventId: booth.eventId,
+      eventName: booth.event.title,
+      date: startIso.split("T")[0],
+      endDate: endIso.split("T")[0],
+      rawStartDate: startIso,
+      rawEndDate: endIso,
+      venue: venueDisplay,
+      boothSize: "Standard",
+      boothNumber: booth.boothNumber,
+      paymentStatus: booth.status === "BOOKED" ? "PAID" : "PENDING",
+      setupTime: "8:00 AM - 10:00 AM",
+      dismantleTime: "6:00 PM - 8:00 PM",
+      passes: 5,
+      passesUsed: 0,
+      invoiceAmount: booth.totalCost,
+      currency: booth.currency || booth.event.currency || "USD",
+      status: booth.event.status,
+      specialRequests: booth.specialRequests ?? undefined,
+      organizer: booth.event.organizer,
+    }
+  })
 
   return events;
+}
+
+// --- Exhibitor reviews ---
+export async function listExhibitorReviews(exhibitorId: string) {
+  if (!exhibitorId) {
+    throw new Error("exhibitorId is required");
+  }
+  const rows = await prisma.review.findMany({
+    where: { exhibitorId },
+    include: {
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    rating: r.rating ?? 0,
+    title: "",
+    comment: r.comment ?? "",
+    createdAt: r.createdAt.toISOString(),
+    user: r.user
+      ? {
+          id: r.user.id,
+          firstName: r.user.firstName,
+          lastName: r.user.lastName,
+          avatar: r.user.avatar ?? undefined,
+        }
+      : { id: "", firstName: "Unknown", lastName: "", avatar: undefined },
+    replies: [],
+  }));
+}
+
+export async function createExhibitorReview(
+  exhibitorId: string,
+  body: { rating: number; title?: string; comment: string },
+  userId?: string
+) {
+  if (!exhibitorId) {
+    throw new Error("exhibitorId is required");
+  }
+  const review = await prisma.review.create({
+    data: {
+      exhibitorId,
+      userId: userId ?? null,
+      rating: body.rating,
+      comment: body.comment?.trim() ?? "",
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+        },
+      },
+    },
+  });
+  return {
+    id: review.id,
+    rating: review.rating ?? 0,
+    title: "",
+    comment: review.comment ?? "",
+    createdAt: review.createdAt.toISOString(),
+    user: review.user
+      ? {
+          id: review.user.id,
+          firstName: review.user.firstName,
+          lastName: review.user.lastName,
+          avatar: review.user.avatar ?? undefined,
+        }
+      : { id: "", firstName: "Unknown", lastName: "", avatar: undefined },
+    replies: [],
+  };
+}
+
+// --- Exhibitor products ---
+
+export async function listExhibitorProducts(exhibitorId: string) {
+  if (!exhibitorId) {
+    throw new Error("exhibitorId is required");
+  }
+  const products = await prisma.product.findMany({
+    where: { exhibitorId },
+    orderBy: { createdAt: "desc" },
+  });
+  return products.map((p) => toProductShape(p));
+}
+
+function toProductShape(p: { id: string; name: string; category: string | null; description: string | null; price: number | null; currency: string | null; images: string[]; brochure: string[]; youtube: string[] }) {
+  return {
+    id: p.id,
+    name: p.name,
+    category: p.category ?? undefined,
+    description: p.description ?? undefined,
+    price: p.price ?? undefined,
+    currency: p.currency ?? undefined,
+    images: p.images ?? [],
+    brochure: p.brochure ?? [],
+    youtube: Array.isArray(p.youtube) ? (p.youtube.length > 0 ? String(p.youtube[0]) : "") : "",
+  };
+}
+
+export async function createExhibitorProduct(
+  exhibitorId: string,
+  body: {
+    name: string;
+    category?: string;
+    description?: string;
+    price?: number;
+    currency?: string;
+    images?: string[];
+    brochure?: string[];
+    youtube?: string | string[];
+  }
+) {
+  if (!exhibitorId) {
+    throw new Error("exhibitorId is required");
+  }
+  const youtubeArr = Array.isArray(body.youtube)
+    ? body.youtube
+    : body.youtube
+      ? [body.youtube]
+      : [];
+  const product = await prisma.product.create({
+    data: {
+      exhibitorId,
+      name: body.name ?? "",
+      category: body.category ?? null,
+      description: body.description ?? null,
+      price: body.price ?? null,
+      currency: body.currency ?? null,
+      images: body.images ?? [],
+      brochure: body.brochure ?? [],
+      youtube: youtubeArr,
+    },
+  });
+  return toProductShape(product);
+}
+
+export async function updateExhibitorProduct(
+  exhibitorId: string,
+  productId: string,
+  body: Partial<{
+    name: string;
+    category: string;
+    description: string;
+    price: number;
+    currency: string;
+    images: string[];
+    brochure: string[];
+    youtube: string | string[];
+  }>
+) {
+  const existing = await prisma.product.findFirst({
+    where: { id: productId, exhibitorId },
+  });
+  if (!existing) {
+    return null;
+  }
+  const youtubeArr =
+    body.youtube !== undefined
+      ? Array.isArray(body.youtube)
+        ? body.youtube
+        : body.youtube
+          ? [body.youtube]
+          : []
+      : undefined;
+  const product = await prisma.product.update({
+    where: { id: productId },
+    data: {
+      ...(body.name !== undefined && { name: body.name }),
+      ...(body.category !== undefined && { category: body.category }),
+      ...(body.description !== undefined && { description: body.description }),
+      ...(body.price !== undefined && { price: body.price }),
+      ...(body.currency !== undefined && { currency: body.currency }),
+      ...(body.images !== undefined && { images: body.images }),
+      ...(body.brochure !== undefined && { brochure: body.brochure }),
+      ...(youtubeArr !== undefined && { youtube: youtubeArr }),
+    },
+  });
+  return toProductShape(product);
+}
+
+export async function deleteExhibitorProduct(exhibitorId: string, productId: string) {
+  const existing = await prisma.product.findFirst({
+    where: { id: productId, exhibitorId },
+  });
+  if (!existing) {
+    return false;
+  }
+  await prisma.product.delete({
+    where: { id: productId },
+  });
+  return true;
 }
 

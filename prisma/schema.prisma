@@ -293,6 +293,7 @@ model User {
   registrations     EventRegistration[]
   speakerSessions   SpeakerSession[]
   exhibitorBooths   ExhibitorBooth[]
+  products         Product[]
   organizerPromotions Promotion[] @relation("OrganizerPromotions")
   exhibitorPromotions Promotion[] @relation("ExhibitorPromotions")
   savedEvents       SavedEvent[]
@@ -304,6 +305,11 @@ model User {
 
   // Venue appointments (as visitor/requester)
   visitorAppointments VenueAppointment[] @relation("VenueAppointmentVisitor")
+
+  // Event-exhibitor appointments (as requester / visitor)
+  appointmentsAsRequester Appointment[] @relation("AppointmentRequester")
+  // Event-exhibitor appointments (as exhibitor)
+  appointmentsAsExhibitor Appointment[] @relation("AppointmentExhibitor")
 
   @@map("users")
 }
@@ -384,8 +390,93 @@ model Event {
   savedEvents       SavedEvent[]
 
   analytics        EventAnalytics[]
+  appointments     Appointment[]
+  conferences      Conference[]
 
   @@map("events")
+}
+
+// Conference agenda (days/themes and sessions per event)
+model Conference {
+  id         String   @id @default(uuid()) @db.Uuid
+  eventId    String   @db.Uuid
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  date       String
+  day        String
+  theme      String
+  isPublished Boolean @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  sessions   ConferenceSession[]
+
+  @@index([eventId])
+  @@map("conferences")
+}
+
+model ConferenceSession {
+  id           String   @id @default(uuid()) @db.Uuid
+  conferenceId String   @db.Uuid
+  conference   Conference @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  time         String
+  title        String
+  description  String?
+  speaker      String?
+  type         String   @default("SESSION")
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([conferenceId])
+  @@map("conference_sessions")
+}
+
+// Event–exhibitor–visitor meeting requests (Schedule Meeting on event exhibitor list)
+model Appointment {
+  id          String   @id @default(uuid()) @db.Uuid
+  eventId     String   @db.Uuid
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  exhibitorId String   @db.Uuid
+  exhibitor   User     @relation("AppointmentExhibitor", fields: [exhibitorId], references: [id])
+  requesterId String   @db.Uuid
+  requester   User     @relation("AppointmentRequester", fields: [requesterId], references: [id])
+
+  title       String
+  description String?
+  type        String   @default("CONSULTATION")
+  status      String   @default("PENDING")
+  priority    String   @default("MEDIUM")
+
+  requestedDate DateTime
+  requestedTime String
+  duration      Int      @default(60)
+  confirmedDate DateTime?
+  confirmedTime String?
+
+  meetingType String  @default("IN_PERSON")
+  location    String?
+  meetingLink String?
+
+  purpose String?
+  agenda String[] @default([])
+  notes  String?
+
+  requesterCompany String?
+  requesterTitle   String?
+  requesterPhone  String?
+  requesterEmail  String?
+
+  cancellationReason String?
+  cancelledBy        String?  @db.Uuid
+  cancelledAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([eventId])
+  @@index([exhibitorId])
+  @@index([requesterId])
+  @@index([status])
+  @@map("appointments")
 }
 
 model TicketType {
@@ -475,6 +566,25 @@ model ExhibitorBooth {
 
   @@unique([eventId, exhibitorId])
   @@map("exhibitor_booths")
+}
+
+model Product {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  category    String?
+  description String?
+  price       Float?
+  currency    String?
+  images      String[] @default([])
+  brochure    String[] @default([])
+  youtube     String[] @default([])
+  exhibitorId String   @db.Uuid
+  exhibitor   User     @relation(fields: [exhibitorId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([exhibitorId])
+  @@map("products")
 }
 
 model SpeakerSession {

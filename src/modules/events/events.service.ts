@@ -962,6 +962,197 @@ export async function listEventSpaceCosts(eventId: string) {
   return spaces;
 }
 
+/** List exhibition spaces for an event (for Add Exhibitor dropdown and Event Info Space Cost tab). */
+export async function listExhibitionSpaces(eventId: string) {
+  const spaces = await prisma.exhibitionSpace.findMany({
+    where: { eventId },
+    orderBy: { name: "asc" },
+  });
+  return spaces.map((s) => ({
+    id: s.id,
+    eventId: s.eventId,
+    name: s.name,
+    spaceType: s.spaceType,
+    description: s.description,
+    dimensions: s.dimensions,
+    area: s.area,
+    location: s.location,
+    basePrice: s.basePrice,
+    pricePerSqm: s.pricePerSqm,
+    minArea: s.minArea,
+    unit: s.unit,
+    pricePerUnit: s.pricePerUnit,
+    isAvailable: s.isAvailable && (s.bookedBooths ?? 0) < (s.maxBooths ?? 999),
+    maxBooths: s.maxBooths,
+    bookedBooths: s.bookedBooths ?? 0,
+  }));
+}
+
+const EXHIBITION_SPACE_TYPES = [
+  "SHELL_SPACE",
+  "RAW_SPACE",
+  "TWO_SIDE_OPEN",
+  "THREE_SIDE_OPEN",
+  "FOUR_SIDE_OPEN",
+  "MEZZANINE",
+  "ADDITIONAL_POWER",
+  "COMPRESSED_AIR",
+  "CUSTOM",
+] as const;
+
+/** Create an exhibition space for an event. */
+export async function createExhibitionSpace(
+  eventId: string,
+  body: {
+    name: string;
+    spaceType?: string;
+    description?: string;
+    dimensions?: string;
+    area?: number;
+    basePrice?: number;
+    minArea?: number;
+    unit?: string;
+    pricePerSqm?: number;
+    maxBooths?: number;
+  }
+) {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { id: true },
+  });
+  if (!event) return { error: "NOT_FOUND" as const };
+
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  if (!name) return { error: "NAME_REQUIRED" as const };
+
+  const spaceType = EXHIBITION_SPACE_TYPES.includes(body.spaceType as any)
+    ? (body.spaceType as (typeof EXHIBITION_SPACE_TYPES)[number])
+    : "RAW_SPACE";
+
+  const space = await prisma.exhibitionSpace.create({
+    data: {
+      eventId,
+      name,
+      spaceType,
+      description: (body.description as string)?.trim() || name,
+      dimensions: (body.dimensions as string)?.trim() || null,
+      area: Number(body.area) || 100,
+      basePrice: Number(body.basePrice) ?? 0,
+      minArea: body.minArea != null ? Number(body.minArea) : null,
+      unit: (body.unit as string) || "sqm",
+      pricePerSqm: body.pricePerSqm != null ? Number(body.pricePerSqm) : null,
+      maxBooths: body.maxBooths != null ? Number(body.maxBooths) : null,
+    },
+  });
+
+  return {
+    id: space.id,
+    eventId: space.eventId,
+    name: space.name,
+    spaceType: space.spaceType,
+    description: space.description,
+    dimensions: space.dimensions,
+    area: space.area,
+    location: space.location,
+    basePrice: space.basePrice,
+    pricePerSqm: space.pricePerSqm,
+    minArea: space.minArea,
+    unit: space.unit,
+    pricePerUnit: space.pricePerUnit,
+    isAvailable: space.isAvailable,
+    maxBooths: space.maxBooths,
+    bookedBooths: space.bookedBooths ?? 0,
+  };
+}
+
+/** Update an exhibition space (e.g. basePrice, pricePerSqm). */
+export async function updateExhibitionSpace(
+  eventId: string,
+  spaceId: string,
+  body: { basePrice?: number; pricePerSqm?: number; pricePerUnit?: number }
+) {
+  const space = await prisma.exhibitionSpace.findFirst({
+    where: { id: spaceId, eventId },
+  });
+  if (!space) return null;
+
+  const data: Record<string, unknown> = {};
+  if (body.basePrice != null) data.basePrice = Number(body.basePrice);
+  if (body.pricePerSqm != null) data.pricePerSqm = Number(body.pricePerSqm);
+  if (body.pricePerUnit != null) data.pricePerUnit = Number(body.pricePerUnit);
+  if (Object.keys(data).length === 0) return space;
+
+  const updated = await prisma.exhibitionSpace.update({
+    where: { id: spaceId },
+    data,
+  });
+  return updated;
+}
+
+/** Add exhibitor to event (create ExhibitorBooth). */
+export async function addExhibitorToEvent(
+  eventId: string,
+  body: {
+    exhibitorId: string;
+    spaceId: string;
+    boothNumber: string;
+    companyName: string;
+    description?: string;
+    additionalPower?: number;
+    compressedAir?: number;
+    setupRequirements?: string;
+    specialRequests?: string;
+    totalCost: number;
+  }
+) {
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { id: true } });
+  if (!event) return { error: "EVENT_NOT_FOUND" as const };
+  const exhibitor = await prisma.user.findUnique({
+    where: { id: body.exhibitorId },
+    select: { id: true },
+  });
+  if (!exhibitor) return { error: "EXHIBITOR_NOT_FOUND" as const };
+  const space = await prisma.exhibitionSpace.findFirst({
+    where: { id: body.spaceId, eventId },
+    select: { id: true },
+  });
+  if (!space) return { error: "SPACE_NOT_FOUND" as const };
+
+  const existing = await prisma.exhibitorBooth.findUnique({
+    where: { eventId_exhibitorId: { eventId, exhibitorId: body.exhibitorId } },
+  });
+  if (existing) return { error: "ALREADY_REGISTERED" as const };
+
+  const booth = await prisma.exhibitorBooth.create({
+    data: {
+      eventId,
+      exhibitorId: body.exhibitorId,
+      spaceId: body.spaceId,
+      boothNumber: (body.boothNumber as string)?.trim() || "TBD",
+      companyName: (body.companyName as string)?.trim() || "",
+      description: (body.description as string)?.trim() || null,
+      additionalPower: Number(body.additionalPower) || 0,
+      compressedAir: Number(body.compressedAir) || 0,
+      setupRequirements: body.setupRequirements != null && body.setupRequirements !== "" ? body.setupRequirements : undefined,
+      specialRequests: (body.specialRequests as string)?.trim() || null,
+      totalCost: Number(body.totalCost) ?? 0,
+    },
+    include: {
+      exhibitor: { select: { id: true, firstName: true, lastName: true, email: true, company: true } },
+      space: { select: { id: true, name: true, spaceType: true, basePrice: true } },
+    },
+  });
+  return { booth };
+}
+
+/** Remove exhibitor from event (delete ExhibitorBooth by exhibitorId). */
+export async function removeExhibitorFromEvent(eventId: string, exhibitorId: string) {
+  const deleted = await prisma.exhibitorBooth.deleteMany({
+    where: { eventId, exhibitorId },
+  });
+  return deleted.count > 0;
+}
+
 // ----- Write operations: save, promotions, create, update, delete -----
 
 export async function saveEvent(userId: string, eventId: string) {

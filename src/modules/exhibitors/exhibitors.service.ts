@@ -466,6 +466,19 @@ export async function listExhibitorReviews(exhibitorId: string) {
           avatar: true,
         },
       },
+      replies: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -483,8 +496,62 @@ export async function listExhibitorReviews(exhibitorId: string) {
           avatar: r.user.avatar ?? undefined,
         }
       : { id: "", firstName: "Unknown", lastName: "", avatar: undefined },
-    replies: [],
+    replies: (r.replies ?? []).map((rep) => ({
+      id: rep.id,
+      content: rep.content,
+      createdAt: rep.createdAt.toISOString(),
+      isOrganizerReply: rep.isOrganizerReply,
+      user: rep.user
+        ? {
+            id: rep.user.id,
+            firstName: rep.user.firstName,
+            lastName: rep.user.lastName,
+            avatar: rep.user.avatar ?? undefined,
+          }
+        : { id: "", firstName: "Unknown", lastName: "", avatar: undefined },
+    })),
   }));
+}
+
+export async function addExhibitorReviewReply(
+  exhibitorId: string,
+  reviewId: string,
+  body: { content: string },
+  userId: string
+) {
+  const review = await prisma.review.findFirst({
+    where: { id: reviewId, exhibitorId },
+  });
+  if (!review) {
+    throw new Error("Review not found");
+  }
+  const reply = await prisma.reviewReply.create({
+    data: {
+      reviewId,
+      userId,
+      content: body.content?.trim() ?? "",
+      isOrganizerReply: true,
+    },
+    include: {
+      user: {
+        select: { id: true, firstName: true, lastName: true, avatar: true },
+      },
+    },
+  });
+  return {
+    id: reply.id,
+    content: reply.content,
+    createdAt: reply.createdAt.toISOString(),
+    isOrganizerReply: reply.isOrganizerReply,
+    user: reply.user
+      ? {
+          id: reply.user.id,
+          firstName: reply.user.firstName,
+          lastName: reply.user.lastName,
+          avatar: reply.user.avatar ?? undefined,
+        }
+      : { id: "", firstName: "Unknown", lastName: "", avatar: undefined },
+  };
 }
 
 export async function createExhibitorReview(

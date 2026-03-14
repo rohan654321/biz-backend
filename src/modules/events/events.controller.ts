@@ -29,6 +29,7 @@ import {
   removeExhibitorFromEvent,
 } from "./events.service";
 import { createEventAdmin, createSpeakerSession } from "./events-writes.service";
+import prisma from "../../config/prisma";
 
 export async function getEventsHandler(req: Request, res: Response) {
   try {
@@ -187,13 +188,17 @@ export async function getEventLeadsHandler(req: Request, res: Response) {
 export async function createEventLeadHandler(req: Request, res: Response) {
   try {
     const { id: eventId } = req.params;
-    const { type, userId } = req.body as { type?: string; userId?: string };
+    const { type } = req.body as { type?: string; userId?: string };
+    const userId = req.auth?.sub;
 
     if (!eventId) {
       return res.status(400).json({ error: "Event ID is required" });
     }
-    if (!type || !userId) {
-      return res.status(400).json({ error: "type and userId are required" });
+    if (!userId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    if (!type) {
+      return res.status(400).json({ error: "type is required" });
     }
 
     const result = await createEventLead({ eventId, userId, type });
@@ -752,6 +757,175 @@ export async function createSpeakerSessionHandler(req: Request, res: Response) {
       success: false,
       error: err?.message || "Failed to create speaker session",
     });
+  }
+}
+
+/** GET /api/events/:id/followers — users who saved this event (event followers). */
+export async function getEventFollowersHandler(req: Request, res: Response) {
+  try {
+    const { id: eventId } = req.params;
+    if (!eventId) {
+      return res.status(400).json({ error: "Event ID required" });
+    }
+    const saved = await prisma.savedEvent.findMany({
+      where: { eventId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            avatar: true,
+            role: true,
+            company: true,
+            jobTitle: true,
+          },
+        },
+      },
+      orderBy: { savedAt: "desc" },
+    });
+    return res.json({
+      followers: saved.map((s) => ({
+        ...s,
+        savedAt: s.savedAt.toISOString(),
+      })),
+      total: saved.length,
+    });
+  } catch (err: any) {
+    console.error("Error fetching event followers:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+/** GET /api/events/:id/reviews — event reviews with user info. */
+export async function getEventReviewsHandler(req: Request, res: Response) {
+  try {
+    const { id: eventId } = req.params;
+    const includeReplies = req.query.includeReplies === "true";
+    if (!eventId) {
+      return res.status(400).json({ error: "Event ID required" });
+    }
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, title: true, averageRating: true, totalReviews: true },
+    });
+    if (!event) {
+      return res.status(404).json({ error: "Event not found" });
+    }
+    const reviews = await prisma.review.findMany({
+      where: { eventId },
+      orderBy: { createdAt: "desc" },
+    });
+    const reviewsWithUsers = await Promise.all(
+      reviews.map(async (r) => {
+        const user = r.userId
+          ? await prisma.user.findUnique({
+              where: { id: r.userId },
+              select: { id: true, firstName: true, lastName: true, avatar: true },
+            })
+          : null;
+        let replies: any[] = [];
+        if (includeReplies) {
+          const replyRows = await prisma.reviewReply.findMany({
+            where: { reviewId: r.id },
+            include: {
+              user: {
+                select: { id: true, firstName: true, lastName: true, avatar: true },
+              },
+            },
+            orderBy: { createdAt: "asc" },
+          });
+          replies = replyRows.map((rep) => ({
+            id: rep.id,
+            content: rep.content,
+            isOrganizerReply: rep.isOrganizerReply,
+            createdAt: rep.createdAt.toISOString(),
+            user: rep.user || { id: rep.userId, firstName: "Unknown", lastName: "User", avatar: null },
+          }));
+        }
+        return {
+          id: r.id,
+          rating: r.rating,
+          title: (r as any).title ?? "",
+          comment: r.comment,
+          createdAt: r.createdAt.toISOString(),
+          isApproved: true,
+          isPublic: true,
+          user: user || { id: r.userId, firstName: "Unknown", lastName: "User", avatar: null },
+          replies: includeReplies ? replies : undefined,
+        };
+      })
+    );
+    return res.json({
+      event: {
+        ...event,
+        averageRating: event.averageRating ?? 0,
+        totalReviews: event.totalReviews ?? 0,
+      },
+      reviews: reviewsWithUsers,
+    });
+  } catch (err: any) {
+    console.error("Error fetching event reviews:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+/** POST /api/events/:id/reviews — create event review (authenticated). */
+export async function createEventReviewHandler(req: Request, res: Response) {
+  try {
+    const { id: eventId } = req.params;
+    const userId = req.auth?.sub;
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    if (!eventId) {
+      return res.status(400).json({ error: "Event ID required" });
+    }
+    const { rating, title, comment } = req.body || {};
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: "Rating must be between 1 and 5" });
+    }
+    const event = await prisma.event.findUnique({ where: { id: eventId }, select: { id: true } });
+    if (!event) {
+      return res.status(404).json({ error: "Event not found" });
+    }
+    const existing = await prisma.review.findFirst({
+      where: { eventId, userId },
+    });
+    if (existing) {
+      return res.status(400).json({ error: "You have already reviewed this event" });
+    }
+    const review = await prisma.review.create({
+      data: {
+        eventId,
+        userId,
+        rating: Number(rating),
+        comment: comment ?? title ?? "",
+      },
+    });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, firstName: true, lastName: true, avatar: true },
+    });
+    const reviews = await prisma.review.findMany({
+      where: { eventId },
+      select: { rating: true },
+    });
+    const totalRating = reviews.reduce((sum, r) => sum + (r.rating ?? 0), 0);
+    const averageRating = reviews.length ? totalRating / reviews.length : 0;
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { averageRating, totalReviews: reviews.length },
+    });
+    return res.status(201).json({
+      ...review,
+      createdAt: review.createdAt.toISOString(),
+      user: user || { id: userId, firstName: "Unknown", lastName: "User", avatar: null },
+    });
+  } catch (err: any) {
+    console.error("Error creating event review:", err);
+    return res.status(500).json({ error: "Internal server error" });
   }
 }
 

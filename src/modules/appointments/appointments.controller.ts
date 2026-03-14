@@ -25,31 +25,47 @@ export async function getAppointmentsHandler(req: Request, res: Response) {
       requesterId,
       eventId,
     });
-    const formatted = result.appointments.map((apt: any) => ({
-      id: apt.id,
-      eventId: apt.event?.id || apt.eventId,
-      eventName: apt.event?.title || "Unknown Event",
-      eventStartDate: apt.event?.startDate || null,
-      eventEndDate: apt.event?.endDate || null,
-      visitorName: apt.requester
-        ? `${apt.requester.firstName || ""} ${apt.requester.lastName || ""}`.trim()
-        : "Unknown Visitor",
-      visitorEmail: apt.requester?.email || apt.requesterEmail || "",
-      visitorPhone: apt.requester?.phone || apt.requesterPhone || "",
-      company: apt.requester?.company || apt.requesterCompany || "Unknown",
-      designation: apt.requester?.jobTitle || apt.requesterTitle || "Unknown",
-      requestedDate: apt.requestedDate
+    const formatted = result.appointments.map((apt: any) => {
+      const reqDate = apt.requestedDate
         ? new Date(apt.requestedDate).toISOString().split("T")[0]
-        : new Date().toISOString().split("T")[0],
-      requestedTime: apt.requestedTime || "09:00",
-      duration: `${apt.duration || 60} minutes`,
-      purpose: apt.purpose || apt.description || "General meeting",
-      status: apt.status || "PENDING",
-      priority: apt.priority || "MEDIUM",
-      notes: apt.notes || "",
-      meetingLink: apt.meetingLink || "",
-      location: apt.location || "",
-    }));
+        : new Date().toISOString().split("T")[0];
+      const reqTime = apt.requestedTime || "09:00";
+      const exhibitor = apt.exhibitor;
+      return {
+        id: apt.id,
+        exhibitorId: apt.exhibitorId || "",
+        exhibitorName: exhibitor
+          ? `${exhibitor.firstName || ""} ${exhibitor.lastName || ""}`.trim() || "Exhibitor"
+          : "Exhibitor",
+        exhibitorCompany: exhibitor?.company || apt.requesterCompany || "N/A",
+        exhibitorEmail: exhibitor?.email || "",
+        exhibitorPhone: exhibitor?.phone || "",
+        exhibitorAvatar: exhibitor?.avatar || null,
+        eventId: apt.event?.id || apt.eventId,
+        eventName: apt.event?.title || "Unknown Event",
+        eventTitle: apt.event?.title || "Unknown Event",
+        eventStartDate: apt.event?.startDate ? new Date(apt.event.startDate).toISOString() : null,
+        eventEndDate: apt.event?.endDate ? new Date(apt.event.endDate).toISOString() : null,
+        visitorName: apt.requester
+          ? `${apt.requester.firstName || ""} ${apt.requester.lastName || ""}`.trim()
+          : "Unknown Visitor",
+        visitorEmail: apt.requester?.email || apt.requesterEmail || "",
+        visitorPhone: apt.requester?.phone || apt.requesterPhone || "",
+        company: apt.requester?.company || apt.requesterCompany || "Unknown",
+        designation: apt.requester?.jobTitle || apt.requesterTitle || "Unknown",
+        requestedDate: reqDate,
+        requestedTime: reqTime,
+        scheduledAt: `${reqDate}T${reqTime}:00.000Z` || apt.createdAt?.toISOString?.(),
+        duration: apt.duration ?? 60,
+        purpose: apt.purpose || apt.description || "General meeting",
+        status: apt.status || "PENDING",
+        priority: apt.priority || "MEDIUM",
+        notes: apt.notes || "",
+        meetingLink: apt.meetingLink || "",
+        location: apt.location || "",
+        createdAt: apt.createdAt?.toISOString?.(),
+      };
+    });
     return res.json({
       success: true,
       appointments: formatted,
@@ -119,11 +135,14 @@ export async function updateAppointmentHandler(req: Request, res: Response) {
 
 export async function getVenueAppointmentsHandler(req: Request, res: Response) {
   try {
-    const { venueId } = req.query as { venueId?: string };
-    const result = await listVenueAppointments({ venueId });
+    const { venueId, requesterId } = req.query as { venueId?: string; requesterId?: string };
+    const result = await listVenueAppointments({ venueId, requesterId });
 
     const apiAppointments = result.appointments.map((apt: any) => ({
       id: apt.id,
+      venueId: apt.venueId,
+      requesterId: apt.visitorId ?? "",
+      title: apt.purpose ?? "Venue booking",
       requester: apt.visitor
         ? {
             id: apt.visitor.id,
@@ -139,19 +158,41 @@ export async function getVenueAppointmentsHandler(req: Request, res: Response) {
             email: "",
             avatar: null,
           },
+      venue: apt.venue
+        ? {
+            id: apt.venue.id,
+            firstName: apt.venue.firstName ?? "",
+            lastName: apt.venue.lastName ?? "",
+            email: apt.venue.email ?? "",
+            avatar: apt.venue.avatar ?? null,
+          }
+        : {
+            id: "",
+            firstName: "Venue",
+            lastName: "",
+            email: "",
+            avatar: null,
+          },
       requesterPhone: apt.visitor?.phone ?? "",
       requesterCompany: apt.visitor?.company ?? "",
       requesterTitle: apt.visitor?.jobTitle ?? "",
-      requestedDate: apt.requestedDate.toISOString(),
-      requestedTime: apt.requestedTime,
-      duration: apt.duration,
+      requestedDate: apt.requestedDate?.toISOString?.() ?? new Date().toISOString(),
+      requestedTime: apt.requestedTime ?? "09:00",
+      duration: apt.duration ?? 30,
       purpose: apt.purpose ?? "",
-      status: apt.status,
-      priority: apt.priority,
+      status: apt.status ?? "PENDING",
+      priority: apt.priority ?? "MEDIUM",
       notes: apt.notes ?? "",
       meetingLink: apt.meetingLink ?? "",
       location: apt.location ?? "",
-      type: apt.type,
+      type: apt.type ?? "VENUE_TOUR",
+      meetingType: "IN_PERSON",
+      agenda: [],
+      meetingSpacesInterested: [],
+      reminderSent: false,
+      followUpRequired: false,
+      createdAt: apt.createdAt?.toISOString?.() ?? new Date().toISOString(),
+      updatedAt: apt.updatedAt?.toISOString?.() ?? new Date().toISOString(),
     }));
 
     return res.json({

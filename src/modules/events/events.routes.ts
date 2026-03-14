@@ -28,6 +28,9 @@ import {
   updateExhibitionSpaceHandler,
   addExhibitorToEventHandler,
   removeExhibitorFromEventHandler,
+  getEventFollowersHandler,
+  getEventReviewsHandler,
+  createEventReviewHandler,
 } from "./events.controller";
 import { requireUser } from "../../middleware/auth.middleware";
 
@@ -52,6 +55,11 @@ router.get("/events/stats", getEventsStatsHandler);
 router.get("/events/speakers", listSpeakerSessionsHandler);
 router.post("/events/speakers", requireUser, createSpeakerSessionHandler);
 
+// Event followers (saved event users) and reviews (before :id)
+router.get("/events/:id/followers", getEventFollowersHandler);
+router.get("/events/:id/reviews", getEventReviewsHandler);
+router.post("/events/:id/reviews", requireUser, createEventReviewHandler);
+
 // Single event by id / slug / title
 router.get("/events/:id", getEventByIdHandler);
 // Partial update (description, tags, images, brochure, layoutPlan)
@@ -60,7 +68,7 @@ router.patch("/events/:id", patchEventByIdHandler);
 
 // Event sub-resources (leads, exhibitors, speakers, brochure, layout, space-costs)
 router.get("/events/:id/leads", getEventLeadsHandler);
-router.post("/events/:id/leads", createEventLeadHandler);
+router.post("/events/:id/leads", requireUser, createEventLeadHandler);
 router.get("/events/:id/exhibitors", getEventExhibitorsHandler);
 router.get("/events/:id/speakers", getEventSpeakersHandler);
 router.get("/events/:id/brochure", getEventBrochureHandler);

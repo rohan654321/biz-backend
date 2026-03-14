@@ -775,6 +775,14 @@ export async function listEventExhibitors(eventId: string) {
           isAvailable: true,
         },
       },
+      event: {
+        select: {
+          id: true,
+          title: true,
+          startDate: true,
+          endDate: true,
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
   });

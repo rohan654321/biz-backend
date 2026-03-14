@@ -8,11 +8,13 @@ import {
   createExhibitorHandler,
   getExhibitorReviewsHandler,
   createExhibitorReviewHandler,
+  createExhibitorReviewReplyHandler,
   getExhibitorProductsHandler,
   createExhibitorProductHandler,
   updateExhibitorProductHandler,
   deleteExhibitorProductHandler,
 } from "./exhibitors.controller";
+import { requireUser } from "../../middleware/auth.middleware";
 
 const router = Router();
 
@@ -31,8 +33,9 @@ router.get("/exhibitors/:id/analytics", getExhibitorAnalyticsHandler);
 // Exhibitor events
 router.get("/exhibitors/:exhibitorId/events", getExhibitorEventsHandler);
 
-// Exhibitor reviews (list, create)
+// Exhibitor reviews (list, create, reply)
 router.get("/exhibitors/:id/reviews", getExhibitorReviewsHandler);
+router.post("/exhibitors/:id/reviews/:reviewId/replies", requireUser, createExhibitorReviewReplyHandler);
 router.post("/exhibitors/:id/reviews", createExhibitorReviewHandler);
 
 // Exhibitor products (list, create, update, delete)

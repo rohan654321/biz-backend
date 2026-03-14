@@ -123,7 +123,7 @@ export async function getVenueEvents(id: string) {
   };
 }
 
-export async function listVenueReviews(venueId: string) {
+export async function listVenueReviews(venueId: string, options?: { includeReplies?: boolean }) {
   if (!venueId) {
     throw new Error("Invalid venue ID");
   }
@@ -131,9 +131,7 @@ export async function listVenueReviews(venueId: string) {
   let reviews: any[] = [];
   try {
     reviews = await prisma.review.findMany({
-      where: {
-        venueId,
-      },
+      where: { venueId },
       include: {
         user: {
           select: {
@@ -143,32 +141,61 @@ export async function listVenueReviews(venueId: string) {
             avatar: true,
           },
         },
+        ...(options?.includeReplies && {
+          replies: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  avatar: true,
+                },
+              },
+            },
+            orderBy: { createdAt: "asc" as const },
+          },
+        }),
       },
       orderBy: { createdAt: "desc" },
     });
   } catch (err: any) {
-    // If existing data has invalid UUIDs (legacy rows), avoid crashing the
-    // whole endpoint; log and return an empty list instead.
     // eslint-disable-next-line no-console
     console.error("Error loading venue reviews; returning empty list:", err);
     return [];
   }
 
-  const shaped = reviews.map((review) => ({
+  return reviews.map((review) => ({
     id: review.id,
     rating: review.rating ?? 0,
-    title: "", // no separate title in schema
+    title: "",
     comment: review.comment ?? "",
     createdAt: review.createdAt.toISOString(),
-    user: review.user && {
-      id: review.user.id,
-      firstName: review.user.firstName,
-      lastName: review.user.lastName,
-      avatar: review.user.avatar ?? null,
-    },
+    isApproved: true,
+    isPublic: true,
+    user: review.user
+      ? {
+          id: review.user.id,
+          firstName: review.user.firstName,
+          lastName: review.user.lastName,
+          avatar: review.user.avatar ?? null,
+        }
+      : { id: "", firstName: "Unknown", lastName: "User", avatar: null },
+    replies: (review.replies ?? []).map((rep: any) => ({
+      id: rep.id,
+      content: rep.content,
+      createdAt: rep.createdAt.toISOString(),
+      isOrganizerReply: rep.isOrganizerReply,
+      user: rep.user
+        ? {
+            id: rep.user.id,
+            firstName: rep.user.firstName,
+            lastName: rep.user.lastName,
+            avatar: rep.user.avatar ?? null,
+          }
+        : null,
+    })),
   }));
-
-  return shaped;
 }
 
 export async function createVenueReview(params: {
@@ -237,5 +264,87 @@ export async function createVenueReview(params: {
       avatar: review.user.avatar ?? null,
     },
   };
+}
+
+export async function createVenueReviewReply(params: {
+  venueId: string;
+  reviewId: string;
+  userId: string;
+  content: string;
+}) {
+  const { venueId, reviewId, userId, content } = params;
+  if (!venueId || !reviewId || !userId || !content?.trim()) {
+    throw new Error("venueId, reviewId, userId and content are required");
+  }
+  const review = await prisma.review.findFirst({
+    where: { id: reviewId, venueId },
+  });
+  if (!review) {
+    throw new Error("Review not found or does not belong to this venue");
+  }
+  const reply = await prisma.reviewReply.create({
+    data: {
+      reviewId,
+      userId,
+      content: content.trim(),
+      isOrganizerReply: true,
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+        },
+      },
+    },
+  });
+  return {
+    id: reply.id,
+    content: reply.content,
+    isOrganizerReply: reply.isOrganizerReply,
+    createdAt: reply.createdAt.toISOString(),
+    user: reply.user
+      ? {
+          id: reply.user.id,
+          firstName: reply.user.firstName,
+          lastName: reply.user.lastName,
+          avatar: reply.user.avatar ?? null,
+        }
+      : null,
+  };
+}
+
+export async function deleteVenueReviewReply(params: {
+  venueId: string;
+  reviewId: string;
+  replyId: string;
+  userId: string;
+}) {
+  const { venueId, reviewId, replyId, userId } = params;
+  if (!venueId || !reviewId || !replyId || !userId) {
+    throw new Error("venueId, reviewId, replyId and userId are required");
+  }
+  const review = await prisma.review.findFirst({
+    where: { id: reviewId, venueId },
+  });
+  if (!review) {
+    throw new Error("Review not found or does not belong to this venue");
+  }
+  const reply = await prisma.reviewReply.findFirst({
+    where: { id: replyId, reviewId },
+  });
+  if (!reply) {
+    throw new Error("Reply not found");
+  }
+  const isVenueManager = userId === venueId;
+  const isReplyAuthor = reply.userId === userId;
+  if (!isVenueManager && !isReplyAuthor) {
+    throw new Error("Only the reply author or venue manager can delete");
+  }
+  await prisma.reviewReply.delete({
+    where: { id: replyId },
+  });
 }
 

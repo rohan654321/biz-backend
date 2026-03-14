@@ -8,6 +8,7 @@ import {
   createExhibitor,
   listExhibitorReviews,
   createExhibitorReview,
+  addExhibitorReviewReply,
   listExhibitorProducts,
   createExhibitorProduct,
   updateExhibitorProduct,
@@ -147,12 +148,40 @@ export async function createExhibitorReviewHandler(req: Request, res: Response) 
     if (!exhibitorId) {
       return res.status(400).json({ error: "exhibitorId is required" });
     }
-    const userId = (req as any).user?.id;
+    const userId = req.auth?.sub ?? (req as any).user?.id;
     const review = await createExhibitorReview(exhibitorId, req.body ?? {}, userId);
     return res.status(201).json(review);
   } catch (error: any) {
     // eslint-disable-next-line no-console
     console.error("Error creating exhibitor review (backend):", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+export async function createExhibitorReviewReplyHandler(req: Request, res: Response) {
+  try {
+    const exhibitorId = req.params.id ?? req.params.exhibitorId;
+    const reviewId = req.params.reviewId;
+    const userId = req.auth?.sub;
+    if (!exhibitorId || !reviewId) {
+      return res.status(400).json({ error: "exhibitorId and reviewId are required" });
+    }
+    if (!userId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    const reply = await addExhibitorReviewReply(
+      exhibitorId,
+      reviewId,
+      req.body ?? {},
+      userId
+    );
+    return res.status(201).json(reply);
+  } catch (error: any) {
+    if (error instanceof Error && error.message === "Review not found") {
+      return res.status(404).json({ error: "Review not found" });
+    }
+    // eslint-disable-next-line no-console
+    console.error("Error creating exhibitor review reply (backend):", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 }

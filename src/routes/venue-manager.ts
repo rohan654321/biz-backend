@@ -113,8 +113,11 @@ router.post("/venue-manager/:organizerId", async (req, res) => {
       venueName,
       logo,
       contactPerson,
+      firstName,
+      lastName,
       email,
       mobile,
+      tempPassword,
       venueAddress,
       venueCity,
       venueState,
@@ -156,13 +159,17 @@ router.post("/venue-manager/:organizerId", async (req, res) => {
         .json({ success: false, error: "Organizer not found" });
     }
 
-    let firstName = "";
-    let lastName = "";
-    if (contactPerson) {
+    let managerFirst = firstName ?? "";
+    let managerLast = lastName ?? "";
+    if (!managerFirst && !managerLast && contactPerson) {
       const parts = String(contactPerson).split(" ");
-      firstName = parts[0] || "";
-      lastName = parts.slice(1).join(" ") || "";
+      managerFirst = parts[0] || "";
+      managerLast = parts.slice(1).join(" ") || "";
     }
+    const passwordToUse =
+      tempPassword && String(tempPassword).trim()
+        ? String(tempPassword).trim()
+        : "TEMP_PASSWORD";
 
     if (!email) {
       return res.status(400).json({
@@ -189,9 +196,9 @@ router.post("/venue-manager/:organizerId", async (req, res) => {
       data: {
         role: "VENUE_MANAGER",
         email,
-        firstName: firstName || venueName || "Venue",
-        lastName: lastName || "Manager",
-        password: "TEMP_PASSWORD",
+        firstName: managerFirst || venueName || "Venue",
+        lastName: managerLast || "Manager",
+        password: passwordToUse,
         venueName,
         company: venueName || null,
         avatar: logo || null,
@@ -233,6 +240,7 @@ router.post("/venue-manager/:organizerId", async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Venue manager created and added to organizer network",
+      venueId: venueManager.id,
       data: {
         venueManager,
         meetingSpaces: normalizedMeetingSpaces,

@@ -34,6 +34,7 @@ export async function listEventAppointments(params: {
           firstName: true,
           lastName: true,
           email: true,
+          phone: true,
           company: true,
           avatar: true,
         },
@@ -244,11 +245,14 @@ export async function updateEventAppointment(body: Record<string, any>) {
 
 // ─── Venue appointments ────────────────────────────────────────────────────
 
-export async function listVenueAppointments(params: { venueId?: string }) {
+export async function listVenueAppointments(params: { venueId?: string; requesterId?: string }) {
   const where: any = {};
 
   if (params.venueId) {
     where.venueId = params.venueId;
+  }
+  if (params.requesterId) {
+    where.visitorId = params.requesterId;
   }
 
   const [appointments, total] = await Promise.all([
@@ -257,6 +261,15 @@ export async function listVenueAppointments(params: { venueId?: string }) {
       orderBy: { requestedDate: "desc" },
       take: 200,
       include: {
+        venue: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            avatar: true,
+          },
+        },
         visitor: {
           select: {
             id: true,

@@ -11,6 +11,9 @@ import venuesRouter from "../modules/venues/venues.routes";
 import speakersRouter from "../modules/speakers/speakers.routes";
 import appointmentsRouter from "../modules/appointments/appointments.routes";
 import conferencesRouter from "../modules/conferences/conferences.routes";
+import exhibitorManualsRouter from "../modules/exhibitor-manuals/exhibitor-manuals.routes";
+import contentRouter from "./content";
+import reviewsRouter from "./reviews";
 
 const router = Router();
 
@@ -59,6 +62,15 @@ router.use("/", appointmentsRouter);
 
 // Conferences (event agenda / conference agenda)
 router.use("/", conferencesRouter);
+
+// Exhibitor manuals (PDFs per event)
+router.use("/", exhibitorManualsRouter);
+
+// Content (banners — returns [] from backend; no Banner table)
+router.use("/", contentRouter);
+
+// Review replies (organizer replies to event feedback)
+router.use("/", reviewsRouter);
 
 export default router;
 

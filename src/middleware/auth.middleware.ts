@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { AuthService } from "../services/auth.service";
 import { AuthTokenPayload } from "../modules/auth.types";
+import prisma from "../config/prisma";
 
 declare module "express-serve-static-core" {
   interface Request {
@@ -36,6 +37,12 @@ export function requireUser(req: Request, res: Response, next: NextFunction) {
 
     const payload = AuthService.verifyAccessToken(token);
     req.auth = payload;
+
+    // Update lastLogin for presence (green dot); fire-and-forget to avoid blocking
+    const userId = payload.sub;
+    if (userId && userId !== "internal") {
+      prisma.user.update({ where: { id: userId }, data: { lastLogin: new Date() } }).catch(() => {});
+    }
 
     return next();
   } catch (err) {

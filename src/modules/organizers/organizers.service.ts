@@ -1026,7 +1026,7 @@ export async function updateOrganizerSubscriptionSummary(
 
 // ---------- Organizer reviews ----------
 
-export async function listOrganizerReviews(organizerId: string) {
+export async function listOrganizerReviews(organizerId: string, options?: { includeReplies?: boolean }) {
   const reviews = await prisma.review.findMany({
     where: { organizerId },
     include: {
@@ -1045,11 +1045,134 @@ export async function listOrganizerReviews(organizerId: string) {
           startDate: true,
         },
       },
+      ...(options?.includeReplies && {
+        replies: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "asc" as const },
+        },
+      }),
     },
     orderBy: { createdAt: "desc" },
   });
 
-  return reviews;
+  return reviews.map((r) => ({
+    id: r.id,
+    rating: r.rating ?? 0,
+    title: "",
+    comment: r.comment ?? "",
+    createdAt: r.createdAt.toISOString(),
+    isApproved: true,
+    isPublic: true,
+    user: r.user
+      ? {
+          id: r.user.id,
+          firstName: r.user.firstName,
+          lastName: r.user.lastName,
+          avatar: r.user.avatar ?? undefined,
+        }
+      : { id: "", firstName: "Guest", lastName: "", avatar: undefined },
+    event: r.event ?? undefined,
+    replies: (r as any).replies?.map((rep: any) => ({
+      id: rep.id,
+      content: rep.content,
+      createdAt: rep.createdAt.toISOString(),
+      isOrganizerReply: rep.isOrganizerReply,
+      user: rep.user
+        ? {
+            id: rep.user.id,
+            firstName: rep.user.firstName,
+            lastName: rep.user.lastName,
+            avatar: rep.user.avatar ?? undefined,
+          }
+        : { id: "", firstName: "Guest", lastName: "", avatar: undefined },
+    })) ?? [],
+  }));
+}
+
+export async function createOrganizerReview(params: {
+  organizerId: string;
+  userId: string;
+  rating: number;
+  comment: string;
+  title?: string | null;
+}) {
+  const { organizerId, userId, rating, comment } = params;
+  if (!organizerId || !userId) {
+    throw new Error("organizerId and userId are required");
+  }
+  if (!rating || rating < 1 || rating > 5) {
+    throw new Error("Rating must be between 1 and 5");
+  }
+  const organizer = await prisma.user.findFirst({
+    where: { id: organizerId, role: "ORGANIZER" },
+    select: { id: true },
+  });
+  if (!organizer) {
+    throw new Error("Organizer not found");
+  }
+  const existing = await prisma.review.findFirst({
+    where: { userId, organizerId },
+  });
+  if (existing) {
+    throw new Error("You have already reviewed this organizer");
+  }
+  const review = await prisma.review.create({
+    data: {
+      userId,
+      organizerId,
+      rating,
+      comment,
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+        },
+      },
+    },
+  });
+  const all = await prisma.review.findMany({
+    where: { organizerId, rating: { not: null } },
+  });
+  const totalReviews = all.length;
+  const avg =
+    totalReviews === 0
+      ? 0
+      : all.reduce((sum, r) => sum + (r.rating ?? 0), 0) / totalReviews;
+  await prisma.user.update({
+    where: { id: organizerId },
+    data: {
+      averageRating: Math.round(avg * 10) / 10,
+      totalReviews,
+    },
+  });
+  return {
+    id: review.id,
+    rating: review.rating ?? 0,
+    title: "",
+    comment: review.comment ?? "",
+    createdAt: review.createdAt.toISOString(),
+    user: review.user
+      ? {
+          id: review.user.id,
+          firstName: review.user.firstName,
+          lastName: review.user.lastName,
+          avatar: review.user.avatar ?? undefined,
+        }
+      : { id: "", firstName: "Guest", lastName: "", avatar: undefined },
+  };
 }
 
 // ---------- Organizer messages (placeholder) ----------

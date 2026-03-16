@@ -14,6 +14,10 @@ import conferencesRouter from "../modules/conferences/conferences.routes";
 import exhibitorManualsRouter from "../modules/exhibitor-manuals/exhibitor-manuals.routes";
 import contentRouter from "./content";
 import reviewsRouter from "./reviews";
+import connectionsRouter from "../modules/network/connections.routes";
+import networkRouter from "../modules/network/network.routes";
+import conversationsRouter from "../modules/messages/conversations.routes";
+import messagesRouter from "../modules/messages/messages.routes";
 
 const router = Router();
 
@@ -41,6 +45,9 @@ router.use("/", uploadRouter);
 
 // Venue manager routes
 router.use("/", venueManagerRouter);
+
+// Event networking discovery (must be before events router so /events/:eventId/network matches)
+router.use("/events", networkRouter);
 
 // Events & search routes
 router.use("/", eventsRouter);
@@ -71,6 +78,13 @@ router.use("/", contentRouter);
 
 // Review replies (organizer replies to event feedback)
 router.use("/", reviewsRouter);
+
+// Network: connections (LinkedIn-style)
+router.use("/connections", connectionsRouter);
+
+// Messaging: conversations and messages
+router.use("/conversations", conversationsRouter);
+router.use("/messages", messagesRouter);
 
 export default router;
 

@@ -27,8 +27,10 @@ router.post("/reviews/:id/replies", requireUser, async (req: Request, res: Respo
     if (!review) {
       return res.status(404).json({ error: "Review not found" });
     }
-    if (review.event?.organizerId !== userId) {
-      return res.status(403).json({ error: "Only the event organizer can reply" });
+    const isEventOrganizer = review.event?.organizerId === userId;
+    const isProfileOrganizer = review.organizerId === userId;
+    if (!isEventOrganizer && !isProfileOrganizer) {
+      return res.status(403).json({ error: "Only the organizer can reply" });
     }
 
     const reply = await prisma.reviewReply.create({

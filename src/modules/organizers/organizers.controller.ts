@@ -12,12 +12,14 @@ import {
   getOrganizerSubscriptionSummary,
   updateOrganizerSubscriptionSummary,
   listOrganizerReviews,
+  createOrganizerReview,
   listOrganizerMessages,
   createOrganizerMessage,
   deleteOrganizerMessage,
   updateOrganizerProfile,
   listOrganizerConnections,
 } from "./organizers.service";
+import prisma from "../../config/prisma";
 import { updateEventByOrganizer, deleteEventByOrganizer } from "../events/events.service";
 import { createEventAdmin } from "../events/events-writes.service";
 
@@ -646,14 +648,36 @@ export async function updateOrganizerSubscriptionHandler(req: Request, res: Resp
 export async function getOrganizerReviewsHandler(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const reviews = await listOrganizerReviews(id);
+    const includeReplies = req.query.includeReplies === "true";
+    const reviews = await listOrganizerReviews(id, { includeReplies });
 
-    return res.json({
-      success: true,
-      data: {
-        reviews,
+    const organizer = await prisma.user.findFirst({
+      where: { id, role: "ORGANIZER" },
+      select: {
+        id: true,
+        averageRating: true,
+        totalReviews: true,
+        organizationName: true,
+        firstName: true,
+        lastName: true,
       },
     });
+
+    const payload: { success: true; reviews: any[]; data?: { reviews: any[] }; organizer?: any } = {
+      success: true,
+      reviews,
+    };
+    payload.data = { reviews };
+    if (organizer) {
+      payload.organizer = {
+        id: organizer.id,
+        name: organizer.organizationName || `${organizer.firstName ?? ""} ${organizer.lastName ?? ""}`.trim(),
+        averageRating: organizer.averageRating ?? 0,
+        totalReviews: organizer.totalReviews ?? 0,
+      };
+    }
+
+    return res.json(payload);
   } catch (error: any) {
     // eslint-disable-next-line no-console
     console.error("Error fetching organizer reviews (backend):", error);
@@ -662,6 +686,47 @@ export async function getOrganizerReviewsHandler(req: Request, res: Response) {
       error: "Failed to fetch reviews",
       details: error.message,
     });
+  }
+}
+
+export async function createOrganizerReviewHandler(req: Request, res: Response) {
+  try {
+    const { id: organizerId } = req.params;
+    const userId = req.auth?.sub;
+    const { rating, comment, title } = req.body ?? {};
+
+    if (!organizerId) {
+      return res.status(400).json({ success: false, error: "Invalid organizer ID" });
+    }
+    if (!userId) {
+      return res.status(401).json({ success: false, error: "Authentication required to submit a review" });
+    }
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ success: false, error: "Rating must be between 1 and 5" });
+    }
+    if (!comment || !String(comment).trim()) {
+      return res.status(400).json({ success: false, error: "Comment is required" });
+    }
+
+    const review = await createOrganizerReview({
+      organizerId,
+      userId,
+      rating: Number(rating),
+      comment: String(comment).trim(),
+      title: title ?? undefined,
+    });
+
+    return res.status(201).json(review);
+  } catch (error: any) {
+    if (error?.message?.includes("already reviewed")) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
+    if (error?.message?.includes("not found")) {
+      return res.status(404).json({ success: false, error: error.message });
+    }
+    // eslint-disable-next-line no-console
+    console.error("Error creating organizer review (backend):", error);
+    return res.status(500).json({ success: false, error: "Failed to create review" });
   }
 }
 

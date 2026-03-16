@@ -482,33 +482,26 @@ export async function listExhibitorReviews(exhibitorId: string) {
     },
     orderBy: { createdAt: "desc" },
   });
+  const toUserDisplay = (u: { id: string; firstName: string | null; lastName: string | null; avatar: string | null } | null) => {
+    if (!u) return { id: "", firstName: "Guest", lastName: "", avatar: undefined as string | undefined };
+    const first = (u.firstName ?? "").trim() || "Guest";
+    const last = (u.lastName ?? "").trim();
+    return { id: u.id, firstName: first, lastName: last, avatar: u.avatar ?? undefined };
+  };
+
   return rows.map((r) => ({
     id: r.id,
     rating: r.rating ?? 0,
     title: "",
     comment: r.comment ?? "",
     createdAt: r.createdAt.toISOString(),
-    user: r.user
-      ? {
-          id: r.user.id,
-          firstName: r.user.firstName,
-          lastName: r.user.lastName,
-          avatar: r.user.avatar ?? undefined,
-        }
-      : { id: "", firstName: "Unknown", lastName: "", avatar: undefined },
+    user: toUserDisplay(r.user),
     replies: (r.replies ?? []).map((rep) => ({
       id: rep.id,
       content: rep.content,
       createdAt: rep.createdAt.toISOString(),
       isOrganizerReply: rep.isOrganizerReply,
-      user: rep.user
-        ? {
-            id: rep.user.id,
-            firstName: rep.user.firstName,
-            lastName: rep.user.lastName,
-            avatar: rep.user.avatar ?? undefined,
-          }
-        : { id: "", firstName: "Unknown", lastName: "", avatar: undefined },
+      user: toUserDisplay(rep.user),
     })),
   }));
 }

@@ -19,6 +19,7 @@ import {
   getOrganizerSubscriptionHandler,
   updateOrganizerSubscriptionHandler,
   getOrganizerReviewsHandler,
+  createOrganizerReviewHandler,
   updateOrganizerProfileHandler,
   getOrganizerConnectionsHandler,
 } from "./organizers.controller";
@@ -101,8 +102,9 @@ router.put(
   updateOrganizerSubscriptionHandler
 );
 
-// Organizer reviews (dashboard, authenticated)
-router.get("/organizers/:id/reviews", requireUser, getOrganizerReviewsHandler);
+// Organizer reviews (public GET for profile + dashboard; POST requires auth)
+router.get("/organizers/:id/reviews", getOrganizerReviewsHandler);
+router.post("/organizers/:id/reviews", requireUser, createOrganizerReviewHandler);
 
 export default router;
 

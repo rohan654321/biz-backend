@@ -45,6 +45,56 @@ function toFrontendEvent(event: any): any {
 }
 
 /**
+ * GET /api/users/search?q=...
+ * User search for "Find people" / connections. Must be before /users/:id so "search" is not captured as id.
+ */
+router.get("/users/search", async (req: Request, res: Response) => {
+  const q = String(req.query.q ?? "").trim();
+
+  if (!q) {
+    return res.json({ success: true, data: [], users: [] });
+  }
+
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { firstName: { contains: q, mode: "insensitive" } },
+          { lastName: { contains: q, mode: "insensitive" } },
+          { email: { contains: q, mode: "insensitive" } },
+          { company: { contains: q, mode: "insensitive" } },
+          { jobTitle: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        avatar: true,
+        company: true,
+        jobTitle: true,
+      },
+      take: 50,
+      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+    });
+
+    return res.json({
+      success: true,
+      data: users,
+      users,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Error searching users:", err);
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal server error" });
+  }
+});
+
+/**
  * GET /api/users/:id
  * Public user profile by id (used by dashboards).
  */
@@ -532,56 +582,6 @@ router.post("/users/:id/messages", async (req: Request, res: Response) => {
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("Error creating user message:", err);
-    return res
-      .status(500)
-      .json({ success: false, error: "Internal server error" });
-  }
-});
-
-/**
- * GET /api/users/search
- * Simple user search used by connections-section to "find people".
- */
-router.get("/users/search", async (req: Request, res: Response) => {
-  const q = String(req.query.q ?? "").trim();
-
-  if (!q) {
-    return res.json({ success: true, data: [], users: [] });
-  }
-
-  try {
-    const users = await prisma.user.findMany({
-      where: {
-        isActive: true,
-        OR: [
-          { firstName: { contains: q, mode: "insensitive" } },
-          { lastName: { contains: q, mode: "insensitive" } },
-          { email: { contains: q, mode: "insensitive" } },
-          { company: { contains: q, mode: "insensitive" } },
-          { jobTitle: { contains: q, mode: "insensitive" } },
-        ],
-      },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        avatar: true,
-        company: true,
-        jobTitle: true,
-      },
-      take: 50,
-      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-    });
-
-    return res.json({
-      success: true,
-      data: users,
-      users,
-    });
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error("Error searching users:", err);
     return res
       .status(500)
       .json({ success: false, error: "Internal server error" });

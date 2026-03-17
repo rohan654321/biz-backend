@@ -93,3 +93,41 @@ export async function listFollowers(followingId: string) {
     followedAt: r.createdAt.toISOString(),
   }));
 }
+
+/** Count users that this user follows. */
+export async function getFollowingCount(followerId: string): Promise<number> {
+  return prisma.follow.count({
+    where: { followerId },
+  });
+}
+
+/** List users that this user follows (for follow-management UI). */
+export async function listFollowing(followerId: string) {
+  const rows = await prisma.follow.findMany({
+    where: { followerId },
+    include: {
+      following: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          avatar: true,
+          jobTitle: true,
+          company: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map((r) => ({
+    id: r.following.id,
+    firstName: r.following.firstName,
+    lastName: r.following.lastName,
+    email: r.following.email,
+    avatar: r.following.avatar,
+    jobTitle: r.following.jobTitle,
+    company: r.following.company,
+    followedAt: r.createdAt.toISOString(),
+  }));
+}

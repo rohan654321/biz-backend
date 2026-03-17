@@ -4,7 +4,9 @@ import {
   unfollowUser,
   getIsFollowing,
   getFollowersCount,
+  getFollowingCount,
   listFollowers,
+  listFollowing,
 } from "./follow.service";
 
 export async function followUserHandler(req: Request, res: Response) {
@@ -86,5 +88,41 @@ export async function listFollowersHandler(req: Request, res: Response) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return res.status(500).json({ error: "Failed to list followers", details: message });
+  }
+}
+
+export async function getFollowStatsHandler(req: Request, res: Response) {
+  try {
+    const userId = req.params.userId;
+    if (!userId) {
+      return res.status(400).json({ error: "userId is required" });
+    }
+    const [followersCount, followingCount] = await Promise.all([
+      getFollowersCount(userId),
+      getFollowingCount(userId),
+    ]);
+    return res.json({
+      success: true,
+      stats: { followersCount, followingCount },
+      followers: followersCount,
+      following: followingCount,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return res.status(500).json({ error: "Failed to fetch follow stats", details: message });
+  }
+}
+
+export async function listFollowingHandler(req: Request, res: Response) {
+  try {
+    const userId = req.params.userId;
+    if (!userId) {
+      return res.status(400).json({ error: "userId is required" });
+    }
+    const following = await listFollowing(userId);
+    return res.json({ success: true, following });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return res.status(500).json({ error: "Failed to list following", details: message });
   }
 }

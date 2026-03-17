@@ -101,6 +101,65 @@ export async function getSpeakerById(id: string) {
   return profile;
 }
 
+// Speaker sessions (for Presentation Materials / My Sessions)
+export async function getSpeakerSessions(speakerId: string) {
+  const sessions = await prisma.speakerSession.findMany({
+    where: { speakerId },
+    include: {
+      event: {
+        select: {
+          id: true,
+          title: true,
+          slug: true,
+          startDate: true,
+          endDate: true,
+        },
+      },
+      materials: {
+        orderBy: { uploadedAt: "desc" },
+      },
+    },
+    orderBy: { startTime: "desc" },
+  });
+
+  return sessions.map((s) => ({
+    id: s.id,
+    title: s.title,
+    description: s.description,
+    sessionType: s.sessionType,
+    duration: s.duration,
+    startTime: s.startTime.toISOString(),
+    endTime: s.endTime.toISOString(),
+    room: s.room ?? null,
+    status: s.status,
+    youtube: s.youtube ?? [],
+    event: s.event
+      ? {
+          id: s.event.id,
+          name: s.event.title,
+          title: s.event.title,
+          slug: s.event.slug,
+          startDate: s.event.startDate.toISOString(),
+          endDate: s.event.endDate.toISOString(),
+        }
+      : null,
+    materials: (s.materials ?? []).map((m) => ({
+      id: m.id,
+      fileName: m.fileName,
+      fileUrl: m.fileUrl,
+      fileSize: m.fileSize,
+      fileType: m.fileType,
+      mimeType: m.mimeType,
+      status: m.status,
+      allowDownload: m.allowDownload,
+      uploadedAt: m.uploadedAt.toISOString(),
+      downloadCount: m.downloadCount,
+      viewCount: m.viewCount,
+    })),
+    deadline: s.endTime.toISOString(),
+  }));
+}
+
 // Create a new speaker (event dashboard "Create new speaker")
 export async function createSpeaker(body: Record<string, unknown>) {
   const {

@@ -12,6 +12,17 @@ const MAX_DOCUMENT_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png"]);
 const ALLOWED_DOCUMENT_MIME_TYPES = new Set(["application/pdf"]);
+const MAX_MATERIAL_SIZE_BYTES = 20 * 1024 * 1024; // 20MB for presentation materials
+const ALLOWED_MATERIAL_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/jpeg",
+  "image/png",
+  "video/mp4",
+]);
 
 function ensureFilePresent(file: Express.Multer.File | undefined | null): asserts file is Express.Multer.File {
   if (!file) {
@@ -56,5 +67,15 @@ export async function handleDocumentUpload(file: Express.Multer.File): Promise<U
   validateDocumentFile(file);
   const result = await uploadDocument(file.buffer);
   return toUploadResult(result);
+}
+
+export function validateMaterialFile(file: { mimetype: string; size: number } | null | undefined): void {
+  if (!file) throw new Error("FILE_MISSING");
+  if (!ALLOWED_MATERIAL_MIME_TYPES.has(file.mimetype)) {
+    throw new Error("UNSUPPORTED_MATERIAL_TYPE");
+  }
+  if (file.size > MAX_MATERIAL_SIZE_BYTES) {
+    throw new Error("MATERIAL_TOO_LARGE");
+  }
 }
 

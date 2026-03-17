@@ -305,6 +305,7 @@ model User {
   venueEvents       Event[]  @relation("EventVenue")
   registrations     EventRegistration[]
   speakerSessions   SpeakerSession[]
+  speakerMaterials SessionMaterial[]
   exhibitorBooths   ExhibitorBooth[]
   products         Product[]
   organizerPromotions Promotion[] @relation("OrganizerPromotions")
@@ -661,10 +662,38 @@ model SpeakerSession {
   averageRating Float @default(0)
   totalRatings  Int   @default(0)
 
+  materials SessionMaterial[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("speaker_sessions")
+}
+
+model SessionMaterial {
+  id          String   @id @default(uuid()) @db.Uuid
+  sessionId   String   @db.Uuid
+  session     SpeakerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  speakerId   String   @db.Uuid
+  speaker     User     @relation(fields: [speakerId], references: [id], onDelete: Cascade)
+
+  fileName    String
+  fileUrl     String
+  publicId    String?
+  fileSize    Int
+  fileType    String   // PRESENTATION, DOCUMENT, VIDEO, IMAGE, OTHER
+  mimeType    String
+  status      String   @default("DRAFT") // DRAFT, FINAL, ARCHIVED
+  allowDownload Boolean @default(true)
+  description String?
+
+  downloadCount Int @default(0)
+  viewCount     Int @default(0)
+  uploadedAt    DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([speakerId])
+  @@map("session_materials")
 }
 
 model Promotion {

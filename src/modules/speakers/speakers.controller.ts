@@ -3,6 +3,7 @@ import {
   listSpeakers,
   getSpeakerById,
   getSpeakerEvents,
+  getSpeakerSessions,
   updateSpeakerProfile,
   createSpeaker,
 } from "./speakers.service";
@@ -57,6 +58,24 @@ export async function getSpeakerEventsHandler(req: Request, res: Response) {
   } catch (error: any) {
     // eslint-disable-next-line no-console
     console.error("Error fetching speaker events (backend):", error);
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+    });
+  }
+}
+
+export async function getSpeakerSessionsHandler(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ success: false, error: "Speaker ID required" });
+    }
+    const sessions = await getSpeakerSessions(id);
+    return res.json({ success: true, sessions });
+  } catch (error: any) {
+    // eslint-disable-next-line no-console
+    console.error("Error fetching speaker sessions (backend):", error);
     return res.status(500).json({
       success: false,
       error: "Internal server error",

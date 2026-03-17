@@ -3,6 +3,7 @@ import {
   getSpeakersHandler,
   getSpeakerHandler,
   getSpeakerEventsHandler,
+  getSpeakerSessionsHandler,
   putSpeakerHandler,
   postSpeakerHandler,
 } from "./speakers.controller";
@@ -24,6 +25,9 @@ router.put("/speakers/:id", requireUser, putSpeakerHandler);
 
 // Speaker events
 router.get("/speakers/:id/events", getSpeakerEventsHandler);
+
+// Speaker sessions (Presentation Materials)
+router.get("/speakers/:id/sessions", getSpeakerSessionsHandler);
 
 export default router;
 

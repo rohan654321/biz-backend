@@ -12,6 +12,8 @@ import speakersRouter from "../modules/speakers/speakers.routes";
 import appointmentsRouter from "../modules/appointments/appointments.routes";
 import conferencesRouter from "../modules/conferences/conferences.routes";
 import exhibitorManualsRouter from "../modules/exhibitor-manuals/exhibitor-manuals.routes";
+import materialsRouter from "../modules/materials/materials.routes";
+import sessionsRouter from "./sessions";
 import contentRouter from "./content";
 import reviewsRouter from "./reviews";
 import connectionsRouter from "../modules/network/connections.routes";
@@ -73,6 +75,10 @@ router.use("/", conferencesRouter);
 
 // Exhibitor manuals (PDFs per event)
 router.use("/", exhibitorManualsRouter);
+
+// Speaker session materials & session update
+router.use("/", materialsRouter);
+router.use("/", sessionsRouter);
 
 // Content (banners — returns [] from backend; no Banner table)
 router.use("/", contentRouter);

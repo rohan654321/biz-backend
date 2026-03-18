@@ -27,29 +27,62 @@ export async function listOrganizers(query: Record<string, unknown>) {
         lastName: true,
         email: true,
         phone: true,
-        company: true,
+        avatar: true,
+        role: true,
         isActive: true,
+        isVerified: true,
+        lastLogin: true,
         createdAt: true,
         updatedAt: true,
+        organizationName: true,
+        description: true,
+        headquarters: true,
+        founded: true,
+        teamSize: true,
+        specialties: true,
+        achievements: true,
+        certifications: true,
+        businessEmail: true,
+        businessPhone: true,
+        businessAddress: true,
+        taxId: true,
         totalEvents: true,
         activeEvents: true,
+        totalAttendees: true,
+        totalRevenue: true,
       },
     }),
     prisma.user.count({ where }),
   ]);
   const data = items.map((u) => ({
     id: u.id,
-    name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
     firstName: u.firstName,
     lastName: u.lastName,
     email: u.email,
     phone: u.phone,
-    company: u.company,
+    avatar: u.avatar,
+    role: u.role,
     isActive: u.isActive,
-    totalEvents: u.totalEvents,
-    activeEvents: u.activeEvents,
+    isVerified: u.isVerified,
+    lastLogin: u.lastLogin ? u.lastLogin.toISOString() : null,
     createdAt: u.createdAt.toISOString(),
     updatedAt: u.updatedAt.toISOString(),
+    organizationName: u.organizationName,
+    description: u.description,
+    headquarters: u.headquarters,
+    founded: u.founded,
+    teamSize: u.teamSize,
+    specialties: u.specialties,
+    achievements: u.achievements,
+    certifications: u.certifications,
+    businessEmail: u.businessEmail,
+    businessPhone: u.businessPhone,
+    businessAddress: u.businessAddress,
+    taxId: u.taxId,
+    totalEvents: u.totalEvents,
+    activeEvents: u.activeEvents,
+    totalAttendees: u.totalAttendees,
+    totalRevenue: u.totalRevenue,
   }));
   return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
 }
@@ -104,7 +137,7 @@ export async function createOrganizer(body: Record<string, unknown>) {
 export async function updateOrganizer(id: string, body: Record<string, unknown>) {
   const existing = await prisma.user.findFirst({ where: { id, role: ROLE } });
   if (!existing) return null;
-  const allowed = ["firstName", "lastName", "phone", "company", "isActive", "description", "website"];
+  const allowed = ["firstName", "lastName", "phone", "company", "isActive", "isVerified", "description", "website"];
   const data: Record<string, unknown> = {};
   for (const k of allowed) {
     if (body[k] !== undefined) data[k] = body[k];

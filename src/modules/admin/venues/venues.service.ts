@@ -88,7 +88,8 @@ export async function getVenueById(id: string) {
 export async function createVenue(body: Record<string, unknown>) {
   const email = String(body.email ?? "").trim().toLowerCase();
   if (!email) throw new Error("Email is required");
-  const existing = await prisma.user.findFirst({ where: { email, role: ROLE } });
+  // Prevent duplicate email across any role to avoid unique constraint error
+  const existing = await prisma.user.findFirst({ where: { email } });
   if (existing) throw new Error("Venue with this email already exists");
   const user = await prisma.user.create({
     data: {

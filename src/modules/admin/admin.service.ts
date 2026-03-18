@@ -267,10 +267,13 @@ export async function adminUpdateEvent(
     return { error: "NOT_FOUND" as const };
   }
 
+  // Only these fields can be updated; venue/organizer/location are relations and must not be overwritten
   const allowedFields = [
     "title",
     "description",
     "shortDescription",
+    "slug",
+    "edition",
     "status",
     "category",
     "tags",
@@ -280,6 +283,16 @@ export async function adminUpdateEvent(
     "registrationStart",
     "registrationEnd",
     "timezone",
+    "maxAttendees",
+    "currentAttendees",
+    "currency",
+    "images",
+    "videos",
+    "documents",
+    "brochure",
+    "layoutPlan",
+    "bannerImage",
+    "thumbnailImage",
     "isFeatured",
     "isVIP",
     "isPublic",
@@ -290,6 +303,7 @@ export async function adminUpdateEvent(
     "metaDescription",
     "isVerified",
     "verifiedBadgeImage",
+    "verifiedBy",
   ];
 
   const raw: Record<string, unknown> = {};
@@ -334,6 +348,19 @@ export async function adminUpdateEvent(
   if (raw.category !== undefined) updateData.category = toStrArray(raw.category);
   if (raw.tags !== undefined) updateData.tags = toStrArray(raw.tags);
   if (raw.eventType !== undefined) updateData.eventType = toStrArray(raw.eventType);
+  if (raw.images !== undefined) updateData.images = toStrArray(raw.images);
+  if (raw.videos !== undefined) updateData.videos = toStrArray(raw.videos);
+  if (raw.documents !== undefined) updateData.documents = toStrArray(raw.documents);
+
+  // Prisma Int fields — only set when valid so we don't overwrite with undefined
+  if (raw.maxAttendees !== undefined && raw.maxAttendees !== null) {
+    const n = Number(raw.maxAttendees);
+    if (!Number.isNaN(n)) updateData.maxAttendees = n;
+  }
+  if (raw.currentAttendees !== undefined && raw.currentAttendees !== null) {
+    const n = Number(raw.currentAttendees);
+    if (!Number.isNaN(n)) updateData.currentAttendees = n;
+  }
 
   // Prisma DateTime fields — ensure strings are converted to Date
   const dateFields = ["startDate", "endDate", "registrationStart", "registrationEnd", "verifiedAt"];

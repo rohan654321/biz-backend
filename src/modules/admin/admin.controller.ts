@@ -93,12 +93,18 @@ export async function adminUpdateEventHandler(req: Request, res: Response) {
     const { id } = req.params;
     const body = { ...(req.body ?? {}) } as any;
 
-    // Map frontend flags to Prisma fields
+    // Map frontend names to Prisma fields (only these are written; venue/location/organizer are not)
     if (typeof body.featured === "boolean") {
       body.isFeatured = body.featured;
     }
     if (typeof body.vip === "boolean") {
       body.isVIP = body.vip;
+    }
+    if (body.layout !== undefined) {
+      body.layoutPlan = body.layout;
+    }
+    if (body.maxCapacity !== undefined) {
+      body.maxAttendees = body.maxCapacity;
     }
 
     if (body.isVerified === true && !body.verifiedBy && req.auth?.sub) {

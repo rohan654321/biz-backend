@@ -351,7 +351,14 @@ export async function getSpeakerEvents(id: string) {
     where: { speakerId },
     include: {
       event: {
-        include: {
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          startDate: true,
+          bannerImage: true,
+          averageRating: true,
+          currentAttendees: true,
           venue: true,
         },
       },
@@ -363,22 +370,35 @@ export async function getSpeakerEvents(id: string) {
   const upcoming = sessions.filter((s) => new Date(s.startTime) > now);
   const past = sessions.filter((s) => new Date(s.startTime) <= now);
 
-  const mapSessionToEvent = (session: any) => ({
+  const mapSessionToEvent = (session: { event: any }) => ({
     id: session.event.id,
+    slug: session.event.slug ?? "",
     title: session.event.title,
     date: session.event.startDate.toISOString(),
     location: session.event.venue
-      ? `${session.event.venue.venueName}, ${session.event.venue.venueCity}, ${session.event.venue.venueState}, ${session.event.venue.venueCountry}`
+      ? `${session.event.venue.venueName ?? ""}, ${session.event.venue.venueCity ?? ""}, ${session.event.venue.venueState ?? ""}, ${session.event.venue.venueCountry ?? ""}`.replace(/^,\s*|,\s*$/g, "").replace(/,\s*,/g, ",") || "TBD"
       : "TBD",
     image: session.event.bannerImage || "/images/gpex.jpg",
     averageRating: session.event.averageRating || 0,
     currentAttendees: session.event.currentAttendees || 0,
   });
 
+  const dedupeByEventId = (sessionsList: typeof upcoming) => {
+    const seen = new Set<string>();
+    const out: ReturnType<typeof mapSessionToEvent>[] = [];
+    for (const s of sessionsList) {
+      const eid = s.event?.id;
+      if (!eid || seen.has(eid)) continue;
+      seen.add(eid);
+      out.push(mapSessionToEvent(s));
+    }
+    return out;
+  };
+
   return {
     success: true,
-    upcoming: upcoming.map(mapSessionToEvent),
-    past: past.map(mapSessionToEvent),
+    upcoming: dedupeByEventId(upcoming),
+    past: dedupeByEventId(past),
   };
 }
 

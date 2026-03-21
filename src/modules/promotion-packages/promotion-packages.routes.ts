@@ -4,10 +4,11 @@ import { listPromotionPackages } from "../admin/promotion-package/promotion-pack
 
 const router = Router();
 
-router.get("/promotion-packages", requireUser, (req, res) => {
+router.get("/promotion-packages", requireUser, async (req, res) => {
   try {
     const userType = typeof req.query.userType === "string" ? req.query.userType.toUpperCase() : undefined;
-    const packages = listPromotionPackages().filter((pkg) => {
+    const all = await listPromotionPackages();
+    const packages = all.filter((pkg) => {
       if (!pkg.isActive) return false;
       if (!userType) return true;
       return pkg.userType === "BOTH" || pkg.userType === userType;

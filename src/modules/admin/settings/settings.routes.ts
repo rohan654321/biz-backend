@@ -10,6 +10,11 @@ router.patch("/notifications", requireAdmin, ctrl.patchNotifications);
 router.post("/notifications/test", requireAdmin, ctrl.postNotificationTest);
 router.get("/security", requireAdmin, ctrl.getSecurity);
 router.get("/language", requireAdmin, ctrl.getLanguage);
+router.patch("/language", requireAdmin, ctrl.patchLanguageLocale);
+// More specific routes before /language/:languageId
+router.patch("/language/translation/:translationId", requireAdmin, ctrl.patchTranslationRow);
+router.patch("/language/:languageId", requireAdmin, ctrl.patchLanguageRow);
+router.delete("/language/:languageId", requireAdmin, ctrl.deleteLanguageRow);
 router.get("/backup", requireAdmin, ctrl.getBackup);
 
 export default router;

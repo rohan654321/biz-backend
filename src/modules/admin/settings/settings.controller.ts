@@ -50,12 +50,54 @@ export async function getSecurity(req: Request, res: Response) {
   }
 }
 
-export async function getLanguage(req: Request, res: Response) {
+export async function getLanguage(_req: Request, res: Response) {
   try {
-    const data = await service.getLanguage();
-    return sendOne(res, data);
+    const data = service.getLanguagePageData();
+    return res.json(data);
   } catch (e: any) {
     return sendError(res, 500, "Failed to get language settings", e?.message);
+  }
+}
+
+export async function patchLanguageLocale(req: Request, res: Response) {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const result = service.patchLanguageLocaleSettings(body);
+    return res.json(result);
+  } catch (e: any) {
+    return sendError(res, 500, "Failed to save language settings", e?.message);
+  }
+}
+
+export async function patchLanguageRow(req: Request, res: Response) {
+  try {
+    const { languageId } = req.params;
+    const updates = (req.body ?? {}) as Record<string, unknown>;
+    const result = service.patchLanguageRow(languageId, updates);
+    return res.json(result);
+  } catch (e: any) {
+    return sendError(res, 500, "Failed to update language", e?.message);
+  }
+}
+
+export async function patchTranslationRow(req: Request, res: Response) {
+  try {
+    const { translationId } = req.params;
+    const translation = (req.body ?? {}) as Record<string, unknown>;
+    const result = service.patchTranslationRow(translationId, translation);
+    return res.json(result);
+  } catch (e: any) {
+    return sendError(res, 500, "Failed to update translation", e?.message);
+  }
+}
+
+export async function deleteLanguageRow(req: Request, res: Response) {
+  try {
+    const { languageId } = req.params;
+    const result = service.deleteLanguageRow(languageId);
+    return res.json(result);
+  } catch (e: any) {
+    return sendError(res, 500, "Failed to delete language", e?.message);
   }
 }
 

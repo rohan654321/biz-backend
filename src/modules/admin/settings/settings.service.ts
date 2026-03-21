@@ -1,4 +1,5 @@
 import prisma from "../../../config/prisma";
+import { languageSettingsSeed } from "./language-settings.seed";
 
 export async function getModules() {
   return { modules: [] };
@@ -37,8 +38,33 @@ export async function getSecurity() {
   return { settings: {} };
 }
 
-export async function getLanguage() {
-  return { languages: [], defaultLanguage: "en" };
+/** Full payload for admin Language & Localization page (matches legacy Next.js shape). */
+export function getLanguagePageData() {
+  return {
+    languages: languageSettingsSeed.languages.map((l) => ({ ...l })),
+    translations: languageSettingsSeed.translations.map((t) => ({
+      ...t,
+      translations: { ...t.translations },
+    })),
+    settings: { ...languageSettingsSeed.settings },
+    stats: [...languageSettingsSeed.stats],
+  };
+}
+
+export function patchLanguageLocaleSettings(body: Record<string, unknown>) {
+  return { success: true as const, settings: body };
+}
+
+export function patchLanguageRow(languageId: string, updates: Record<string, unknown>) {
+  return { success: true as const, id: languageId, updates };
+}
+
+export function patchTranslationRow(translationId: string, translation: Record<string, unknown>) {
+  return { success: true as const, id: translationId, translation };
+}
+
+export function deleteLanguageRow(languageId: string) {
+  return { success: true as const, deleted: languageId };
 }
 
 export async function getBackup() {

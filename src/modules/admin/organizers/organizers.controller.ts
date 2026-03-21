@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { sendList, sendOne, sendError } from "../../../lib/admin-response";
 import * as service from "./organizers.service";
+import * as promoAdmin from "../promotions/promotions-admin.service";
 
 export async function list(req: Request, res: Response) {
   try {
@@ -77,5 +78,42 @@ export async function listVenueBookings(req: Request, res: Response) {
     return res.json({ data: items });
   } catch (e: any) {
     return sendError(res, 500, "Failed to list venue bookings", e?.message);
+  }
+}
+
+export async function listOrganizerPromotions(_req: Request, res: Response) {
+  try {
+    const result = await promoAdmin.listOrganizerPromotionsAdmin();
+    return res.json(result);
+  } catch (e: any) {
+    return sendError(res, 500, "Failed to fetch promotions", e?.message);
+  }
+}
+
+export async function getOrganizerPromotionById(req: Request, res: Response) {
+  try {
+    const promotion = await promoAdmin.getOrganizerPromotionAdmin(req.params.id);
+    if (!promotion) return sendError(res, 404, "Promotion not found");
+    return res.json({ promotion });
+  } catch (e: any) {
+    return sendError(res, 500, "Failed to fetch promotion", e?.message);
+  }
+}
+
+export async function patchOrganizerPromotion(req: Request, res: Response) {
+  try {
+    const updated = await promoAdmin.patchOrganizerPromotionAdmin(req.params.id, req.body ?? {});
+    if (!updated) return sendError(res, 404, "Promotion not found");
+    return res.json({
+      success: true,
+      promotion: updated,
+      message: `Promotion ${updated.status.toLowerCase()} successfully`,
+    });
+  } catch (e: any) {
+    if (e?.message === "INVALID_STATUS") return sendError(res, 400, "Invalid status value");
+    if (e?.message === "REJECTION_REASON_REQUIRED") {
+      return sendError(res, 400, "Rejection reason is required");
+    }
+    return sendError(res, 500, "Failed to update promotion", e?.message);
   }
 }

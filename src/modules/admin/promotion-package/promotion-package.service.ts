@@ -1,3 +1,13 @@
+import { randomUUID } from "crypto";
+import type { Prisma } from "@prisma/client";
+import { getAppSettingJson, setAppSettingJson } from "../../../lib/admin-app-setting";
+
+function asJsonInput<T>(v: T): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
+}
+
+const KEY = "promotion_packages_catalog";
+
 export interface PromotionPackageItem {
   id: string;
   name: string;
@@ -14,15 +24,78 @@ export interface PromotionPackageItem {
   order: number;
 }
 
-const packagesStore: PromotionPackageItem[] = [];
-
-export function listPromotionPackages(): PromotionPackageItem[] {
-  return [...packagesStore].sort((a, b) => (a.order - b.order) || a.name.localeCompare(b.name));
+function defaultPackages(): PromotionPackageItem[] {
+  return [
+    {
+      id: "pkg_featured_home",
+      name: "Featured on Homepage",
+      description: "Premium placement on the main discovery feed.",
+      price: 299,
+      features: ["7-day placement", "Highlighted card", "Priority in search"],
+      userCount: 0,
+      duration: "7 days",
+      durationDays: 7,
+      categories: [],
+      recommended: true,
+      isActive: true,
+      userType: "BOTH",
+      order: 1,
+    },
+    {
+      id: "pkg_event_boost",
+      name: "Event Boost",
+      description: "Increased visibility for a single event.",
+      price: 149,
+      features: ["14-day boost", "Email mention", "Social snippet"],
+      userCount: 0,
+      duration: "14 days",
+      durationDays: 14,
+      categories: [],
+      recommended: false,
+      isActive: true,
+      userType: "ORGANIZER",
+      order: 2,
+    },
+    {
+      id: "pkg_exhibitor_spotlight",
+      name: "Exhibitor Spotlight",
+      description: "Dedicated exhibitor promotion slot.",
+      price: 199,
+      features: ["Booth map pin", "Lead form CTA"],
+      userCount: 0,
+      duration: "10 days",
+      durationDays: 10,
+      categories: [],
+      recommended: false,
+      isActive: true,
+      userType: "EXHIBITOR",
+      order: 3,
+    },
+  ];
 }
 
-export function createPromotionPackage(input: Partial<PromotionPackageItem>): PromotionPackageItem {
+async function loadPackages(): Promise<PromotionPackageItem[]> {
+  let list = await getAppSettingJson<PromotionPackageItem[] | null>(KEY, null);
+  if (!list || !Array.isArray(list) || list.length === 0) {
+    list = defaultPackages();
+    await setAppSettingJson(KEY, asJsonInput(list));
+  }
+  return list;
+}
+
+async function savePackages(list: PromotionPackageItem[]) {
+  await setAppSettingJson(KEY, asJsonInput(list));
+}
+
+export async function listPromotionPackages(): Promise<PromotionPackageItem[]> {
+  const list = await loadPackages();
+  return [...list].sort((a, b) => (a.order - b.order) || a.name.localeCompare(b.name));
+}
+
+export async function createPromotionPackage(input: Partial<PromotionPackageItem>): Promise<PromotionPackageItem> {
+  const list = await loadPackages();
   const item: PromotionPackageItem = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: randomUUID(),
     name: String(input.name ?? "").trim(),
     description: String(input.description ?? "").trim(),
     price: Number(input.price ?? 0),
@@ -34,33 +107,43 @@ export function createPromotionPackage(input: Partial<PromotionPackageItem>): Pr
     recommended: !!input.recommended,
     isActive: input.isActive !== false,
     userType: String(input.userType ?? "BOTH"),
-    order: Number(input.order ?? 0),
+    order: Number(input.order ?? list.length),
   };
-  packagesStore.push(item);
+  list.push(item);
+  await savePackages(list);
   return item;
 }
 
-export function updatePromotionPackage(id: string, input: Partial<PromotionPackageItem>): PromotionPackageItem | null {
-  const idx = packagesStore.findIndex((p) => p.id === id);
+export async function updatePromotionPackage(
+  id: string,
+  input: Partial<PromotionPackageItem>,
+): Promise<PromotionPackageItem | null> {
+  const list = await loadPackages();
+  const idx = list.findIndex((p) => p.id === id);
   if (idx === -1) return null;
-  const current = packagesStore[idx];
+  const current = list[idx];
   const updated: PromotionPackageItem = {
     ...current,
     ...input,
+    id: current.id,
     price: input.price !== undefined ? Number(input.price) : current.price,
     userCount: input.userCount !== undefined ? Number(input.userCount) : current.userCount,
     durationDays: input.durationDays !== undefined ? Number(input.durationDays) : current.durationDays,
-    features: input.features !== undefined ? (Array.isArray(input.features) ? input.features.map(String) : []) : current.features,
+    features:
+      input.features !== undefined ? (Array.isArray(input.features) ? input.features.map(String) : []) : current.features,
     categories:
       input.categories !== undefined ? (Array.isArray(input.categories) ? input.categories.map(String) : []) : current.categories,
   };
-  packagesStore[idx] = updated;
+  list[idx] = updated;
+  await savePackages(list);
   return updated;
 }
 
-export function deletePromotionPackage(id: string): boolean {
-  const idx = packagesStore.findIndex((p) => p.id === id);
+export async function deletePromotionPackage(id: string): Promise<boolean> {
+  const list = await loadPackages();
+  const idx = list.findIndex((p) => p.id === id);
   if (idx === -1) return false;
-  packagesStore.splice(idx, 1);
+  list.splice(idx, 1);
+  await savePackages(list);
   return true;
 }

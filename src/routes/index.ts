@@ -22,6 +22,10 @@ import networkRouter from "../modules/network/network.routes";
 import conversationsRouter from "../modules/messages/conversations.routes";
 import messagesRouter from "../modules/messages/messages.routes";
 import locationRouter from "../modules/location/location.routes";
+import marketingPublicRouter from "../modules/admin/marketing/marketing-public.routes";
+import promotionPackagesRouter from "../modules/promotion-packages/promotion-packages.routes";
+import eventCategoriesRouter from "../modules/event-categories/event-categories.routes";
+import settingsRouter from "../modules/settings/settings.routes";
 
 const router = Router();
 
@@ -37,6 +41,9 @@ router.get("/health", (_req, res) => {
 
 // Auth-related routes (OTP, login, refresh)
 router.use("/auth", authRouter);
+
+// User dashboard settings (privacy, notifications, email verify, deactivate)
+router.use("/settings", settingsRouter);
 
 // User by id (for Next.js server: visitor dashboard etc.) — secured by INTERNAL_API_SECRET
 router.use("/", userByIdRouter);
@@ -55,6 +62,15 @@ router.use("/events", networkRouter);
 
 // Public location data (countries / cities for browse + venue forms)
 router.use("/location", locationRouter);
+
+// Cross-dashboard marketing feed (requires logged-in user token)
+router.use("/marketing", marketingPublicRouter);
+
+// Promotion packages feed for organizer/exhibitor dashboards
+router.use("/", promotionPackagesRouter);
+
+// Active event categories for promotion targeting
+router.use("/", eventCategoriesRouter);
 
 // Events & search routes
 router.use("/", eventsRouter);

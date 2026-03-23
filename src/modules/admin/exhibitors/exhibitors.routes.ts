@@ -12,6 +12,11 @@ router.patch("/exhibitor-feedback/:id", requireAdmin, ctrl.updateExhibitorFeedba
 router.get("/exhibitor-appointments", requireAdmin, ctrl.listExhibitorAppointments);
 router.patch("/exhibitor-appointments/:id", requireAdmin, ctrl.updateExhibitorAppointmentStatus);
 
+// Exhibitor promotions (admin) — before /:id
+router.get("/promotions", requireAdmin, ctrl.listExhibitorPromotions);
+router.get("/promotions/:id", requireAdmin, ctrl.getExhibitorPromotionById);
+router.patch("/promotions/:id", requireAdmin, ctrl.patchExhibitorPromotion);
+
 router.get("/stats", requireAdmin, ctrl.getStats);
 router.get("/", requireAdmin, ctrl.list);
 router.get("/:id", requireAdmin, ctrl.getById);

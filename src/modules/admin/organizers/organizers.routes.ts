@@ -14,6 +14,11 @@ router.get("/organizer-connections/:id", requireAdmin, ctrl.getOrganizerConnecti
 // GET /api/admin/organizers/venue-bookings
 router.get("/venue-bookings", requireAdmin, ctrl.listVenueBookings);
 
+// Organizer promotions (admin) — before /:id
+router.get("/promotions", requireAdmin, ctrl.listOrganizerPromotions);
+router.get("/promotions/:id", requireAdmin, ctrl.getOrganizerPromotionById);
+router.patch("/promotions/:id", requireAdmin, ctrl.patchOrganizerPromotion);
+
 // Base CRUD
 router.get("/", requireAdmin, ctrl.list);
 router.get("/:id", requireAdmin, ctrl.getById);

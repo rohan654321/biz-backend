@@ -111,3 +111,24 @@ export async function sendVerificationEmail(email: string, otp: string): Promise
   });
 }
 
+export async function sendMarketingEmail(params: {
+  to: string;
+  subject: string;
+  content: string;
+  htmlContent?: string;
+}): Promise<void> {
+  if (!EMAIL_USER || !EMAIL_PASS) {
+    throw new Error("Email credentials are not configured");
+  }
+
+  await transporter.sendMail({
+    from: `"BizTradeFairs" <${EMAIL_USER}>`,
+    to: params.to,
+    subject: params.subject,
+    text: params.content,
+    html:
+      params.htmlContent ||
+      `<div style="font-family: Arial, sans-serif; line-height: 1.6; white-space: pre-wrap;">${params.content}</div>`,
+  });
+}
+

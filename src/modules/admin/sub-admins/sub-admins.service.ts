@@ -26,10 +26,13 @@ export async function listSubAdmins(query: Record<string, unknown>, superAdminId
         email: true,
         name: true,
         phone: true,
+        role: true,
         isActive: true,
         permissions: true,
+        lastLogin: true,
         createdAt: true,
         updatedAt: true,
+        createdBy: { select: { id: true, name: true, email: true } },
       },
     }),
     prisma.subAdmin.count({ where }),
@@ -39,10 +42,13 @@ export async function listSubAdmins(query: Record<string, unknown>, superAdminId
     email: u.email,
     name: u.name,
     phone: u.phone,
+    role: u.role,
     isActive: u.isActive,
     permissions: u.permissions ?? [],
+    lastLogin: u.lastLogin?.toISOString() ?? null,
     createdAt: u.createdAt.toISOString(),
     updatedAt: u.updatedAt.toISOString(),
+    createdBy: { id: u.createdBy.id, name: u.createdBy.name, email: u.createdBy.email },
   }));
   return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
 }
@@ -55,17 +61,28 @@ export async function getSubAdminById(id: string) {
       email: true,
       name: true,
       phone: true,
+      role: true,
       isActive: true,
       permissions: true,
+      lastLogin: true,
       createdAt: true,
       updatedAt: true,
+      createdBy: { select: { id: true, name: true, email: true } },
     },
   });
   if (!sub) return null;
   return {
-    ...sub,
+    id: sub.id,
+    email: sub.email,
+    name: sub.name,
+    phone: sub.phone,
+    role: sub.role,
+    isActive: sub.isActive,
+    permissions: sub.permissions ?? [],
+    lastLogin: sub.lastLogin?.toISOString() ?? null,
     createdAt: sub.createdAt.toISOString(),
     updatedAt: sub.updatedAt.toISOString(),
+    createdBy: { id: sub.createdBy.id, name: sub.createdBy.name, email: sub.createdBy.email },
   };
 }
 
@@ -77,13 +94,17 @@ export async function createSubAdmin(body: Record<string, unknown>, superAdminId
   const password = String(body.password ?? "").trim();
   if (!password || password.length < 6) throw new Error("Password must be at least 6 characters");
   const hashed = await bcrypt.hash(password, 12);
-  const permissions = Array.isArray(body.permissions) ? body.permissions : [];
+  const permissions = Array.isArray(body.permissions) ? body.permissions.map(String) : [];
+  const roleRaw = String(body.role ?? "SUB_ADMIN").trim();
+  const allowedRoles = ["SUB_ADMIN", "MODERATOR", "SUPPORT"];
+  const role = allowedRoles.includes(roleRaw) ? roleRaw : "SUB_ADMIN";
   const sub = await prisma.subAdmin.create({
     data: {
       email,
       password: hashed,
       name: String(body.name ?? "").trim() || email.split("@")[0],
       phone: body.phone != null ? String(body.phone) : null,
+      role,
       isActive: body.isActive !== false,
       permissions,
       createdById: superAdminId,
@@ -100,7 +121,11 @@ export async function updateSubAdmin(id: string, body: Record<string, unknown>) 
   if (body.email !== undefined) data.email = String(body.email).trim().toLowerCase();
   if (body.phone !== undefined) data.phone = body.phone ? String(body.phone) : null;
   if (body.isActive !== undefined) data.isActive = !!body.isActive;
-  if (Array.isArray(body.permissions)) data.permissions = body.permissions;
+  if (Array.isArray(body.permissions)) data.permissions = body.permissions.map(String);
+  if (body.role !== undefined) {
+    const r = String(body.role).trim();
+    if (["SUB_ADMIN", "MODERATOR", "SUPPORT"].includes(r)) data.role = r;
+  }
   if (body.password !== undefined && String(body.password).trim().length >= 6) {
     data.password = await bcrypt.hash(String(body.password).trim(), 12);
   }

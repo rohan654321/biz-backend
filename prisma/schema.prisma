@@ -30,6 +30,14 @@ enum UserRole {
   VENUE_MANAGER
 }
 
+enum AccountDeactivationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+  CANCELLED
+}
+
 enum EventStatus {
   DRAFT
   PENDING_APPROVAL
@@ -85,6 +93,14 @@ enum ConnectionStatus {
 enum MessageType {
   TEXT
   SYSTEM
+}
+
+enum AdminContentType {
+  NEWS
+  BLOG
+  BANNER
+  FEATURED_EVENT
+  MEDIA
 }
 
 // ─── Admin ──────────────────────────────────────────────────────────────────
@@ -194,9 +210,12 @@ model Otp {
   email     String
   otp       String
   expiresAt DateTime
+  /// When set, OTP is for email change / verification for this user (not signup).
+  userId    String?  @db.Uuid
   createdAt DateTime @default(now())
 
   @@index([email])
+  @@index([userId])
   @@map("otps")
 }
 
@@ -241,6 +260,14 @@ model User {
   timezone        String?
   language        String   @default("en")
   interests       String[] @default([])
+
+  /// Privacy & notification preferences (dashboard Settings)
+  profileVisibility  String  @default("public") // "public" | "private"
+  introduceMe        Boolean @default(true)
+  emailNotifications Boolean @default(true)
+  eventReminders       Boolean @default(true)
+  newMessages          Boolean @default(true)
+  connectionRequests   Boolean @default(true)
 
   organizationName String?
   description      String?
@@ -343,7 +370,32 @@ model User {
   messagesSent             Message[]
   conversationSummaries    ConversationSummary[]
 
+  accountDeactivationRequests AccountDeactivationRequest[]
+
+  adminUserSubscriptions AdminUserSubscription[]
+
   @@map("users")
+}
+
+model AccountDeactivationRequest {
+  id                    String                    @id @default(uuid()) @db.Uuid
+  userId                String                    @db.Uuid
+  user                  User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status                AccountDeactivationStatus @default(PENDING)
+  requestedAt           DateTime                  @default(now())
+  reviewedAt            DateTime?
+  /// Super admin or sub-admin id who reviewed
+  reviewedByAdminId     String?                   @db.Uuid
+  reviewedByAdminType   String?
+  /// After this instant the user account is set inactive (approval date + 30 days)
+  deactivateEffectiveAt DateTime?
+  rejectReason          String?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("account_deactivation_requests")
 }
 
 // ─── Event Categories (admin) ─────────────────────────────────────────────────
@@ -1038,4 +1090,68 @@ model City {
   @@index([isActive])
   @@index([isPermitted])
   @@map("cities")
+}
+
+// ─── Admin CMS & settings (key-value + structured content) ───────────────────
+model AdminAppSetting {
+  id        String   @id @default(uuid()) @db.Uuid
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("admin_app_settings")
+}
+
+model AdminContent {
+  id        String           @id @default(uuid()) @db.Uuid
+  type      AdminContentType
+  title     String?
+  slug      String?
+  body      String?          @db.Text
+  extras    Json?
+  published Boolean          @default(false)
+  sortOrder Int              @default(0)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([type])
+  @@index([published])
+  @@map("admin_content")
+}
+
+model AdminSubscriptionPlan {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  description String?  @db.Text
+  price       Float
+  currency    String   @default("USD")
+  interval    String   @default("MONTHLY")
+  features    Json?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subscriptions AdminUserSubscription[]
+
+  @@map("admin_subscription_plans")
+}
+
+model AdminUserSubscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId    String   @db.Uuid
+  plan      AdminSubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  status    String   @default("ACTIVE")
+  startedAt DateTime @default(now())
+  renewsAt  DateTime?
+  autoRenew Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([planId])
+  @@index([status])
+  @@map("admin_user_subscriptions")
 }

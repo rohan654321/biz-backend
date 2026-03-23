@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { sendList, sendOne, sendError } from "../../../lib/admin-response";
 import * as service from "./exhibitors.service";
 import { updateEventAppointment } from "../../appointments/appointments.service";
+import * as promoAdmin from "../promotions/promotions-admin.service";
 
 export async function list(req: Request, res: Response) {
   try {
@@ -105,5 +106,38 @@ export async function updateExhibitorAppointmentStatus(req: Request, res: Respon
   } catch (e: any) {
     if (e?.message?.includes("not found")) return sendError(res, 404, e.message);
     return sendError(res, 500, "Failed to update appointment", e?.message);
+  }
+}
+
+export async function listExhibitorPromotions(_req: Request, res: Response) {
+  try {
+    const promotions = await promoAdmin.listExhibitorPromotionsAdmin();
+    return res.json(promotions);
+  } catch (e: any) {
+    return sendError(res, 500, "Failed to fetch exhibitor promotions", e?.message);
+  }
+}
+
+export async function getExhibitorPromotionById(req: Request, res: Response) {
+  try {
+    const promotion = await promoAdmin.getExhibitorPromotionAdmin(req.params.id);
+    if (!promotion) return sendError(res, 404, "Promotion not found");
+    return res.json(promotion);
+  } catch (e: any) {
+    return sendError(res, 500, "Failed to fetch promotion", e?.message);
+  }
+}
+
+export async function patchExhibitorPromotion(req: Request, res: Response) {
+  try {
+    const updated = await promoAdmin.patchExhibitorPromotionAdmin(req.params.id, req.body ?? {});
+    if (!updated) return sendError(res, 404, "Promotion not found");
+    return res.json(updated);
+  } catch (e: any) {
+    if (e?.message === "INVALID_STATUS") return sendError(res, 400, "Invalid status");
+    if (e?.message === "REJECTION_REASON_REQUIRED") {
+      return sendError(res, 400, "Rejection reason is required");
+    }
+    return sendError(res, 500, "Failed to update promotion", e?.message);
   }
 }

@@ -1,6 +1,22 @@
 import prisma from "../../config/prisma";
 import { EventStatus } from "@prisma/client";
 
+function toStatusLabel(status: EventStatus | string): string {
+  switch (String(status)) {
+    case "PUBLISHED":
+      return "Approved";
+    case "PENDING_APPROVAL":
+      return "Pending Review";
+    case "REJECTED":
+      return "Rejected";
+    case "CANCELLED":
+      return "Flagged";
+    case "DRAFT":
+    default:
+      return "Draft";
+  }
+}
+
 export async function listAdminEvents() {
   const events = await prisma.event.findMany({
     orderBy: { createdAt: "desc" },
@@ -170,7 +186,9 @@ export async function adminListEvents(params: AdminListEventsParams) {
     city: event.venue?.venueCity ?? "Not specified",
     state: event.venue?.venueState ?? "",
     country: event.venue?.venueCountry ?? "",
-    status: event.status,
+    status: toStatusLabel(event.status),
+    statusRaw: event.status,
+    category: Array.isArray(event.category) ? event.category : [],
     isVirtual: event.isVirtual,
     virtualLink: event.virtualLink,
     maxAttendees: event.maxAttendees,
@@ -198,7 +216,13 @@ export async function adminListEvents(params: AdminListEventsParams) {
     rejectedBy: event.rejectedBy ?? undefined,
     isFeatured: event.isFeatured ?? false,
     isVIP: event.isVIP ?? false,
+    featured: event.isFeatured ?? false,
+    vip: event.isVIP ?? false,
     isPublic: event.isPublic ?? true,
+    isVerified: event.isVerified ?? false,
+    verifiedAt: event.verifiedAt ? event.verifiedAt.toISOString() : null,
+    verifiedBy: event.verifiedBy ?? null,
+    verifiedBadgeImage: event.verifiedBadgeImage ?? null,
   }));
 
   return {

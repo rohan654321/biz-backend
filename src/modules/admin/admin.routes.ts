@@ -32,6 +32,10 @@ import settingsRoutes from "./settings/settings.routes";
 import supportRoutes from "./support/support.routes";
 import integrationsRoutes from "./integrations/integrations.routes";
 import analyticsRoutes from "./analytics/analytics.routes";
+import marketingRoutes from "./marketing/marketing.routes";
+import promotionPackageRoutes from "./promotion-package/promotion-package.routes";
+import accountDeactivationRoutes from "./account-deactivation/account-deactivation.routes";
+import contentAdminRoutes from "./content/content.routes";
 
 const router = Router();
 
@@ -69,5 +73,9 @@ router.use("/settings", settingsRoutes);
 router.use("/support", supportRoutes);
 router.use("/integrations", integrationsRoutes);
 router.use("/analytics", analyticsRoutes);
+router.use("/marketing", marketingRoutes);
+router.use("/promotion-package", promotionPackageRoutes);
+router.use("/account-deactivations", accountDeactivationRoutes);
+router.use("/content", contentAdminRoutes);
 
 export default router;

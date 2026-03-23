@@ -160,6 +160,23 @@ model SubAdmin {
   @@map("sub_admins")
 }
 
+/// Named role templates for sub-admins (custom roles + built-in SUB_ADMIN / MODERATOR / SUPPORT).
+model AdminRoleDefinition {
+  id                 String   @id @default(uuid()) @db.Uuid
+  slug               String   @unique
+  name               String
+  description        String?
+  defaultPermissions String[] @default([])
+  isActive           Boolean  @default(true)
+  isSystem           Boolean  @default(false)
+  sortOrder          Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([isActive])
+  @@map("admin_role_definitions")
+}
+
 model AdminSession {
   id           String    @id @default(uuid()) @db.Uuid
   adminId      String

@@ -36,6 +36,7 @@ import marketingRoutes from "./marketing/marketing.routes";
 import promotionPackageRoutes from "./promotion-package/promotion-package.routes";
 import accountDeactivationRoutes from "./account-deactivation/account-deactivation.routes";
 import contentAdminRoutes from "./content/content.routes";
+import roleDefinitionsRoutes from "./role-definitions/role-definitions.routes";
 
 const router = Router();
 
@@ -77,5 +78,6 @@ router.use("/marketing", marketingRoutes);
 router.use("/promotion-package", promotionPackageRoutes);
 router.use("/account-deactivations", accountDeactivationRoutes);
 router.use("/content", contentAdminRoutes);
+router.use("/role-definitions", roleDefinitionsRoutes);
 
 export default router;

@@ -229,10 +229,13 @@ model Otp {
   expiresAt DateTime
   /// When set, OTP is for email change / verification for this user (not signup).
   userId    String?  @db.Uuid
+  /// "registration" = signup flow; "admin_password_reset" = super/sub-admin forgot password.
+  purpose   String   @default("registration")
   createdAt DateTime @default(now())
 
   @@index([email])
   @@index([userId])
+  @@index([email, purpose])
   @@map("otps")
 }
 

@@ -31,13 +31,29 @@ import {
 } from "./events.service";
 import { createEventAdmin, createSpeakerSession } from "./events-writes.service";
 import prisma from "../../config/prisma";
-import { listActiveEventCategoriesPublic } from "../admin/event-categories/event-categories.service";
+import {
+  listActiveEventCategoriesPublic,
+  listActiveEventCategoriesWithEventCounts,
+} from "../admin/event-categories/event-categories.service";
 
 /** Public list of active event categories (organizer create-event, filters). */
 export async function getPublicEventCategoriesHandler(_req: Request, res: Response) {
   try {
     const categories = await listActiveEventCategoriesPublic();
     return res.json({ success: true, data: categories });
+  } catch (e: any) {
+    return res.status(500).json({
+      success: false,
+      error: e?.message || "Failed to load event categories",
+    });
+  }
+}
+
+/** Homepage / browse: active categories from DB + published public event counts. */
+export async function getEventCategoriesBrowseHandler(_req: Request, res: Response) {
+  try {
+    const categories = await listActiveEventCategoriesWithEventCounts();
+    return res.json({ success: true, categories });
   } catch (e: any) {
     return res.status(500).json({
       success: false,
@@ -59,6 +75,7 @@ export async function getEventsHandler(req: Request, res: Response) {
       featured,
       sort,
       verified,
+      vip,
       stats,
     } = req.query;
 
@@ -85,6 +102,7 @@ export async function getEventsHandler(req: Request, res: Response) {
       featured: featured === "true",
       sort: (sort as string | undefined) ?? "newest",
       verified: verified === "true",
+      vip: vip === "true",
     });
 
     return res.json({
@@ -169,8 +187,9 @@ export async function getRecentEventsHandler(_req: Request, res: Response) {
 
 export async function getVipEventsHandler(_req: Request, res: Response) {
   try {
-    const events = await listVipEvents(10);
-    return res.json(events);
+    const events = await listVipEvents(12);
+    // Array kept for older clients; object shape for structured consumers.
+    return res.json({ success: true, events });
   } catch (error: any) {
     // eslint-disable-next-line no-console
     console.error("Failed to fetch VIP events (backend):", error);

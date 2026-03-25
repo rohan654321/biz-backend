@@ -111,6 +111,77 @@ export async function sendVerificationEmail(email: string, otp: string): Promise
   });
 }
 
+const FRONTEND_BASE =
+  process.env.FRONTEND_URL || process.env.APP_PUBLIC_URL || "http://localhost:3000";
+
+export async function sendPasswordResetLinkEmail(params: {
+  toEmail: string;
+  resetUrl: string;
+  firstName: string;
+  roleLabel: string;
+}): Promise<void> {
+  if (!EMAIL_USER || !EMAIL_PASS) {
+    throw new Error("Email credentials are not configured");
+  }
+
+  const { toEmail, resetUrl, firstName, roleLabel } = params;
+
+  await transporter.sendMail({
+    from: `"BizTradeFairs" <${EMAIL_USER}>`,
+    to: toEmail,
+    subject: "Reset your password",
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto;">
+        <h2 style="color: #2563eb;">Password reset</h2>
+        <p>Hello ${firstName || "there"},</p>
+        <p>We received a request to reset the password for your <strong>${roleLabel}</strong> account.</p>
+        <p style="margin: 24px 0;">
+          <a href="${resetUrl}" style="background: #2563eb; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Reset password</a>
+        </p>
+        <p style="font-size: 13px; color: #6b7280;">This link expires in 1 hour. If you did not request this, you can ignore this email.</p>
+        <p style="font-size: 12px; color: #9ca3af; word-break: break-all;">${resetUrl}</p>
+        <p>Best regards,<br/>The BizTradeFairs Team</p>
+      </div>
+    `,
+  });
+}
+
+/** OTP for super-admin / sub-admin password reset — sent to their login email. */
+export async function sendAdminPasswordResetOtpEmail(params: {
+  toEmail: string;
+  otp: string;
+  name: string;
+  adminKind: "Super Admin" | "Sub Admin";
+}): Promise<void> {
+  if (!EMAIL_USER || !EMAIL_PASS) {
+    throw new Error("Email credentials are not configured");
+  }
+
+  const { toEmail, otp, name, adminKind } = params;
+
+  await transporter.sendMail({
+    from: `"BizTradeFairs" <${EMAIL_USER}>`,
+    to: toEmail,
+    subject: `Your ${adminKind} password reset code`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto;">
+        <h2 style="color: #2563eb;">Admin password reset</h2>
+        <p>Hello ${name || "there"},</p>
+        <p>Use this one-time code to set a new password for your <strong>${adminKind}</strong> account:</p>
+        <div style="background: #f3f4f6; padding: 16px; text-align: center; margin: 20px 0;">
+          <h1 style="font-size: 32px; color: #2563eb; margin: 0; letter-spacing: 4px;">${otp}</h1>
+        </div>
+        <p>This code expires in <strong>15 minutes</strong>.</p>
+        <p>If you did not request this, please ignore this email.</p>
+        <br/>
+        <p>Best regards,<br/>The BizTradeFairs Team</p>
+      </div>
+    `,
+  });
+}
+
+export { FRONTEND_BASE };
+
 export async function sendMarketingEmail(params: {
   to: string;
   subject: string;

@@ -1,6 +1,11 @@
 import bcrypt from "bcryptjs";
 import prisma from "../../../config/prisma";
 import { parseListQuery } from "../../../lib/admin-response";
+import {
+  assertActiveRoleSlug,
+  normalizeRoleSlug,
+  roleSlugToDisplayMap,
+} from "../role-definitions/role-definitions.service";
 
 const SUBADMIN_SAFE_SORT = ["createdAt", "updatedAt", "email", "name"] as const;
 
@@ -15,7 +20,7 @@ export async function listSubAdmins(query: Record<string, unknown>, superAdminId
       { email: { contains: search, mode: "insensitive" } },
     ];
   }
-  const [items, total] = await Promise.all([
+  const [items, total, roleNames] = await Promise.all([
     prisma.subAdmin.findMany({
       where,
       skip,
@@ -36,6 +41,7 @@ export async function listSubAdmins(query: Record<string, unknown>, superAdminId
       },
     }),
     prisma.subAdmin.count({ where }),
+    roleSlugToDisplayMap(),
   ]);
   const data = items.map((u) => ({
     id: u.id,
@@ -43,6 +49,7 @@ export async function listSubAdmins(query: Record<string, unknown>, superAdminId
     name: u.name,
     phone: u.phone,
     role: u.role,
+    roleDisplayName: roleNames[u.role] ?? u.role.replace(/_/g, " "),
     isActive: u.isActive,
     permissions: u.permissions ?? [],
     lastLogin: u.lastLogin?.toISOString() ?? null,
@@ -71,12 +78,14 @@ export async function getSubAdminById(id: string) {
     },
   });
   if (!sub) return null;
+  const displayMap = await roleSlugToDisplayMap();
   return {
     id: sub.id,
     email: sub.email,
     name: sub.name,
     phone: sub.phone,
     role: sub.role,
+    roleDisplayName: displayMap[sub.role] ?? sub.role.replace(/_/g, " "),
     isActive: sub.isActive,
     permissions: sub.permissions ?? [],
     lastLogin: sub.lastLogin?.toISOString() ?? null,
@@ -96,8 +105,8 @@ export async function createSubAdmin(body: Record<string, unknown>, superAdminId
   const hashed = await bcrypt.hash(password, 12);
   const permissions = Array.isArray(body.permissions) ? body.permissions.map(String) : [];
   const roleRaw = String(body.role ?? "SUB_ADMIN").trim();
-  const allowedRoles = ["SUB_ADMIN", "MODERATOR", "SUPPORT"];
-  const role = allowedRoles.includes(roleRaw) ? roleRaw : "SUB_ADMIN";
+  const role = normalizeRoleSlug(roleRaw) || "SUB_ADMIN";
+  await assertActiveRoleSlug(role);
   const sub = await prisma.subAdmin.create({
     data: {
       email,
@@ -123,8 +132,9 @@ export async function updateSubAdmin(id: string, body: Record<string, unknown>) 
   if (body.isActive !== undefined) data.isActive = !!body.isActive;
   if (Array.isArray(body.permissions)) data.permissions = body.permissions.map(String);
   if (body.role !== undefined) {
-    const r = String(body.role).trim();
-    if (["SUB_ADMIN", "MODERATOR", "SUPPORT"].includes(r)) data.role = r;
+    const r = normalizeRoleSlug(String(body.role)) || "SUB_ADMIN";
+    await assertActiveRoleSlug(r);
+    data.role = r;
   }
   if (body.password !== undefined && String(body.password).trim().length >= 6) {
     data.password = await bcrypt.hash(String(body.password).trim(), 12);

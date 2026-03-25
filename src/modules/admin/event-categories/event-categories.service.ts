@@ -1,4 +1,5 @@
 import prisma from "../../../config/prisma";
+import { publicPublishedEventWhere } from "../../../utils/public-profile";
 
 /** Active categories for public / organizer pickers (no counts). */
 export async function listActiveEventCategoriesPublic() {
@@ -7,6 +8,33 @@ export async function listActiveEventCategoriesPublic() {
     orderBy: { name: "asc" },
     select: { id: true, name: true, icon: true, color: true },
   });
+}
+
+/** Active categories with counts of published public events (category name in Event.category[]). */
+export async function listActiveEventCategoriesWithEventCounts() {
+  const categories = await prisma.eventCategory.findMany({
+    where: { isActive: true },
+    orderBy: { name: "asc" },
+  });
+
+  const rows = await Promise.all(
+    categories.map(async (cat) => {
+      const eventCount = await prisma.event.count({
+        where: {
+          AND: [publicPublishedEventWhere(), { category: { has: cat.name } }],
+        },
+      });
+      return {
+        id: cat.id,
+        name: cat.name,
+        icon: cat.icon,
+        color: cat.color ?? "#3B82F6",
+        eventCount,
+      };
+    }),
+  );
+
+  return rows.sort((a, b) => b.eventCount - a.eventCount || a.name.localeCompare(b.name));
 }
 
 export async function listEventCategories() {

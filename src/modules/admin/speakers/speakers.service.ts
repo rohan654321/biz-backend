@@ -63,27 +63,74 @@ export async function getSpeakerById(id: string) {
     email: user.email,
     phone: user.phone,
     company: user.company,
+    jobTitle: user.jobTitle,
+    location: user.location,
+    website: user.website,
+    linkedin: user.linkedin,
+    twitter: user.twitter,
+    instagram: user.instagram,
+    avatar: user.avatar,
     isActive: user.isActive,
     bio: user.bio,
+    speakingExperience: user.speakingExperience,
+    specialties: user.specialties,
+    achievements: user.achievements,
+    certifications: user.certifications,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
   };
 }
 
+function optStr(v: unknown): string | null {
+  if (v === undefined || v === null) return null;
+  const s = String(v).trim();
+  return s.length ? s : null;
+}
+
+function strArray(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
+  if (typeof v === "string") return v.split(",").map((s) => s.trim()).filter(Boolean);
+  return [];
+}
+
 export async function createSpeaker(body: Record<string, unknown>) {
   const email = String(body.email ?? "").trim().toLowerCase();
   if (!email) throw new Error("Email is required");
-  const existing = await prisma.user.findFirst({ where: { email, role: ROLE } });
-  if (existing) throw new Error("Speaker with this email already exists");
+
+  const anyWithEmail = await prisma.user.findFirst({ where: { email } });
+  if (anyWithEmail) {
+    if (anyWithEmail.role === ROLE) throw new Error("Speaker with this email already exists");
+    throw new Error("An account with this email already exists");
+  }
+
+  const passwordRaw = optStr(body.password);
+  const password = passwordRaw ?? "TEMP_PASSWORD";
+
   const user = await prisma.user.create({
     data: {
       email,
+      password,
       role: ROLE,
       firstName: String(body.firstName ?? "").trim() || "Speaker",
       lastName: String(body.lastName ?? "").trim() || "",
-      phone: body.phone != null ? String(body.phone) : null,
-      company: body.company != null ? String(body.company) : null,
-      bio: body.bio != null ? String(body.bio) : null,
+      phone: optStr(body.phone),
+      company: optStr(body.company),
+      jobTitle: optStr(body.jobTitle),
+      location: optStr(body.location),
+      website: optStr(body.website),
+      linkedin: optStr(body.linkedin),
+      twitter: optStr(body.twitter),
+      instagram: optStr(body.instagram),
+      avatar: optStr(body.avatar),
+      bio: optStr(body.bio),
+      speakingExperience: optStr(body.speakingExperience),
+      specialties: strArray(body.specialties ?? body.categories),
+      achievements: strArray(body.achievements),
+      certifications: strArray(body.certifications),
+      interests: strArray(body.interests),
+      timezone: optStr(body.timezone) ?? "UTC",
+      language: optStr(body.language) ?? "en",
+      isVerified: body.isVerified === true,
       isActive: body.isActive !== false,
     },
   });
@@ -93,10 +140,31 @@ export async function createSpeaker(body: Record<string, unknown>) {
 export async function updateSpeaker(id: string, body: Record<string, unknown>) {
   const existing = await prisma.user.findFirst({ where: { id, role: ROLE } });
   if (!existing) return null;
-  const allowed = ["firstName", "lastName", "phone", "company", "isActive", "bio"];
+  const allowed = [
+    "firstName",
+    "lastName",
+    "phone",
+    "company",
+    "jobTitle",
+    "location",
+    "website",
+    "linkedin",
+    "twitter",
+    "instagram",
+    "avatar",
+    "isActive",
+    "bio",
+    "speakingExperience",
+    "specialties",
+    "achievements",
+    "certifications",
+  ];
+  const arrayKeys = new Set(["specialties", "achievements", "certifications"]);
   const data: Record<string, unknown> = {};
   for (const k of allowed) {
-    if (body[k] !== undefined) data[k] = body[k];
+    if (body[k] !== undefined) {
+      data[k] = arrayKeys.has(k) ? strArray(body[k]) : body[k];
+    }
   }
   if (body.email !== undefined) data.email = String(body.email).trim().toLowerCase();
   await prisma.user.update({ where: { id }, data: data as any });

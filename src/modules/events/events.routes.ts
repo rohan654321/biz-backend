@@ -33,6 +33,7 @@ import {
   getEventReviewsHandler,
   createEventReviewHandler,
   getPublicEventCategoriesHandler,
+  getEventCategoriesBrowseHandler,
 } from "./events.controller";
 import { requireUser, optionalUser } from "../../middleware/auth.middleware";
 
@@ -40,6 +41,9 @@ const router = Router();
 
 // Active taxonomy for organizers & public (before /events/:id)
 router.get("/event-categories", getPublicEventCategoriesHandler);
+
+// DB-backed categories + event counts (homepage sidebars, no auth)
+router.get("/events/categories/browse", getEventCategoriesBrowseHandler);
 
 // List events, with filters & pagination
 router.get("/events", getEventsHandler);

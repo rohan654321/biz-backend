@@ -1,11 +1,38 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import prisma from "../config/prisma";
 import { AuthService } from "../services/auth.service";
-import { sendOtpEmail } from "../services/email.service";
+import {
+  sendOtpEmail,
+  sendPasswordResetLinkEmail,
+  sendAdminPasswordResetOtpEmail,
+  FRONTEND_BASE,
+} from "../services/email.service";
 
 const router = Router();
 const BOOTSTRAP_SECRET = process.env.ADMIN_BOOTSTRAP_SECRET;
+
+/** Signup / registration OTP rows — isolated from admin password-reset OTPs. */
+const OTP_PURPOSE_REGISTRATION = "registration";
+const OTP_PURPOSE_ADMIN_PASSWORD_RESET = "admin_password_reset";
+
+const ROLE_DISPLAY: Record<string, string> = {
+  ATTENDEE: "Visitor",
+  ORGANIZER: "Organizer",
+  EXHIBITOR: "Exhibitor",
+  SPEAKER: "Speaker",
+  VENUE_MANAGER: "Venue Manager",
+  ADMIN: "Admin",
+};
+
+function validatePortalPassword(password: string): string | null {
+  if (password.length < 8) return "Password must be at least 8 characters";
+  if (!/[A-Z]/.test(password)) return "Password must contain at least one uppercase letter";
+  if (!/[a-z]/.test(password)) return "Password must contain at least one lowercase letter";
+  if (!/[0-9]/.test(password)) return "Password must contain at least one number";
+  return null;
+}
 
 // POST /api/auth/login – email/password → JWT (user, super-admin, sub-admin)
 router.post("/login", async (req, res) => {
@@ -75,9 +102,11 @@ router.post("/send-otp", async (req, res) => {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-    await prisma.otp.deleteMany({ where: { email: normalizedEmail } });
+    await prisma.otp.deleteMany({
+      where: { email: normalizedEmail, purpose: OTP_PURPOSE_REGISTRATION },
+    });
     await prisma.otp.create({
-      data: { email: normalizedEmail, otp, expiresAt },
+      data: { email: normalizedEmail, otp, expiresAt, purpose: OTP_PURPOSE_REGISTRATION },
     });
 
     // Send OTP email via centralized email service
@@ -103,7 +132,7 @@ router.post("/verify-otp", async (req, res) => {
     const normalizedEmail = email.trim().toLowerCase();
 
     const record = await prisma.otp.findFirst({
-      where: { email: normalizedEmail },
+      where: { email: normalizedEmail, purpose: OTP_PURPOSE_REGISTRATION },
       orderBy: { createdAt: "desc" },
     });
 
@@ -119,7 +148,9 @@ router.post("/verify-otp", async (req, res) => {
       return res.status(400).json({ message: "Invalid OTP" });
     }
 
-    await prisma.otp.deleteMany({ where: { email: normalizedEmail } });
+    await prisma.otp.deleteMany({
+      where: { email: normalizedEmail, purpose: OTP_PURPOSE_REGISTRATION },
+    });
 
     return res.json({ message: "OTP verified successfully" });
   } catch (err) {
@@ -241,6 +272,378 @@ router.post("/register", async (req, res) => {
     return res.status(500).json({
       error: "Registration failed. Please try again.",
       details: error?.message,
+    });
+  }
+});
+
+// POST /api/auth/forgot-password — Express backend only (no Next.js route).
+// Sub-admin & super-admin: 6-digit OTP to their login email.
+// App users: reset link to the same email they entered.
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const emailRaw = (req.body as { email?: string })?.email;
+    if (!emailRaw || typeof emailRaw !== "string") {
+      return res.status(400).json({
+        success: false,
+        error: "Email is required",
+        details: "Invalid email format.",
+      });
+    }
+    const emailLower = emailRaw.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLower)) {
+      return res.status(400).json({
+        success: false,
+        error: "Validation failed",
+        details: "Invalid email address",
+      });
+    }
+
+    const subAdmin = await prisma.subAdmin.findFirst({
+      where: { email: emailLower, isActive: true },
+    });
+    const superAdmin = await prisma.superAdmin.findFirst({
+      where: { email: emailLower, isActive: true },
+    });
+
+    if (subAdmin || superAdmin) {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+      await prisma.otp.deleteMany({
+        where: { email: emailLower, purpose: OTP_PURPOSE_ADMIN_PASSWORD_RESET },
+      });
+      await prisma.otp.create({
+        data: {
+          email: emailLower,
+          otp,
+          expiresAt,
+          purpose: OTP_PURPOSE_ADMIN_PASSWORD_RESET,
+        },
+      });
+      try {
+        if (subAdmin) {
+          await sendAdminPasswordResetOtpEmail({
+            toEmail: emailLower,
+            otp,
+            name: subAdmin.name,
+            adminKind: "Sub Admin",
+          });
+        } else if (superAdmin) {
+          await sendAdminPasswordResetOtpEmail({
+            toEmail: emailLower,
+            otp,
+            name: superAdmin.name,
+            adminKind: "Super Admin",
+          });
+        }
+      } catch (emailErr) {
+        await prisma.otp.deleteMany({
+          where: { email: emailLower, purpose: OTP_PURPOSE_ADMIN_PASSWORD_RESET },
+        });
+        // eslint-disable-next-line no-console
+        console.error("Admin forgot-password email error:", emailErr);
+        return res.status(500).json({
+          success: false,
+          error: "Failed to send reset email. Please try again later.",
+        });
+      }
+      return res.json({
+        success: true,
+        resetMode: "otp",
+        message:
+          "A 6-digit code was sent to your email. Use the admin reset page to set a new password.",
+      });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { email: emailLower, isActive: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: "No account found with this email address. Please check your email or sign up.",
+      });
+    }
+
+    if (!user.emailVerified) {
+      return res.status(403).json({
+        success: false,
+        error: "Email not verified. Please verify your email first.",
+      });
+    }
+
+    const maxResetAttempts = 5;
+    if ((user.passwordResetAttempts ?? 0) >= maxResetAttempts) {
+      return res.status(429).json({
+        success: false,
+        error: "Too many password reset attempts. Please try again later or contact support.",
+      });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetToken,
+        resetTokenExpiry,
+        loginAttempts: 0,
+        passwordResetAttempts: { increment: 1 },
+      },
+    });
+
+    const base = FRONTEND_BASE.replace(/\/$/, "");
+    const encodedEmail = encodeURIComponent(emailLower);
+    const resetUrl = `${base}/reset-password?token=${resetToken}&email=${encodedEmail}`;
+    const userRole = ROLE_DISPLAY[user.role] || user.role;
+    const firstName = user.firstName || "there";
+
+    try {
+      await sendPasswordResetLinkEmail({
+        toEmail: emailLower,
+        resetUrl,
+        firstName,
+        roleLabel: userRole,
+      });
+    } catch (emailErr) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { resetToken: null, resetTokenExpiry: null },
+      });
+      // eslint-disable-next-line no-console
+      console.error("User forgot-password email error:", emailErr);
+      return res.status(500).json({
+        success: false,
+        error: "Failed to send reset email. Please try again later.",
+      });
+    }
+
+    return res.json({
+      success: true,
+      resetMode: "link",
+      message: "Password reset link has been sent to your email.",
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Forgot password error:", err);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to process password reset request. Please try again.",
+    });
+  }
+});
+
+// POST /api/auth/verify-reset-token — portal users (link flow); always 200 + valid flag for client UX.
+router.post("/verify-reset-token", async (req, res) => {
+  try {
+    const { token, email } = (req.body || {}) as { token?: string; email?: string };
+    if (!token || !email) {
+      return res.status(200).json({
+        success: false,
+        valid: false,
+        error: "Token and email are required",
+      });
+    }
+    const emailLower = String(email).trim().toLowerCase();
+    const user = await prisma.user.findFirst({
+      where: {
+        email: emailLower,
+        resetToken: token,
+        resetTokenExpiry: { gt: new Date() },
+        isActive: true,
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        resetTokenExpiry: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(200).json({
+        success: false,
+        valid: false,
+        error: "Invalid or expired reset token",
+      });
+    }
+
+    return res.json({
+      success: true,
+      valid: true,
+      email: user.email,
+      name: `${user.firstName} ${user.lastName}`,
+      role: user.role,
+      userId: user.id,
+      expiresAt: user.resetTokenExpiry,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Verify reset token error:", err);
+    return res.status(200).json({
+      success: false,
+      valid: false,
+      error: "Failed to verify token",
+    });
+  }
+});
+
+// POST /api/auth/reset-password — portal users: token + email; admins: otp + email (no token).
+router.post("/reset-password", async (req, res) => {
+  try {
+    const body = req.body as {
+      email?: string;
+      password?: string;
+      confirmPassword?: string;
+      token?: string;
+      otp?: string;
+    };
+    const emailLower = body.email?.trim().toLowerCase();
+    const password = body.password;
+    const confirmPassword = body.confirmPassword;
+
+    if (!emailLower || !password) {
+      return res.status(400).json({ success: false, error: "Email and password are required" });
+    }
+    if (confirmPassword !== undefined && password !== confirmPassword) {
+      return res.status(400).json({ success: false, error: "Passwords don't match" });
+    }
+
+    const pwErr = validatePortalPassword(password);
+    if (pwErr) {
+      return res.status(400).json({ success: false, error: pwErr, details: pwErr });
+    }
+
+    if (body.otp && !body.token) {
+      const subAdmin = await prisma.subAdmin.findFirst({
+        where: { email: emailLower, isActive: true },
+      });
+      const superAdmin = await prisma.superAdmin.findFirst({
+        where: { email: emailLower, isActive: true },
+      });
+      if (!subAdmin && !superAdmin) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid or expired reset code. Please request a new password reset.",
+        });
+      }
+
+      const record = await prisma.otp.findFirst({
+        where: { email: emailLower, purpose: OTP_PURPOSE_ADMIN_PASSWORD_RESET },
+        orderBy: { createdAt: "desc" },
+      });
+
+      if (!record || record.otp !== String(body.otp).trim()) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid or expired reset code. Please request a new password reset.",
+        });
+      }
+      if (record.expiresAt < new Date()) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid or expired reset code. Please request a new password reset.",
+        });
+      }
+
+      const same = subAdmin
+        ? await bcrypt.compare(password, subAdmin.password)
+        : await bcrypt.compare(password, superAdmin!.password);
+      if (same) {
+        return res.status(400).json({
+          success: false,
+          error: "New password cannot be the same as old password",
+        });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 12);
+      if (subAdmin) {
+        await prisma.subAdmin.update({
+          where: { id: subAdmin.id },
+          data: {
+            password: hashedPassword,
+            loginAttempts: 0,
+            lockoutUntil: null,
+          },
+        });
+      } else {
+        await prisma.superAdmin.update({
+          where: { id: superAdmin!.id },
+          data: {
+            password: hashedPassword,
+            loginAttempts: 0,
+            lockoutUntil: null,
+          },
+        });
+      }
+
+      await prisma.otp.deleteMany({
+        where: { email: emailLower, purpose: OTP_PURPOSE_ADMIN_PASSWORD_RESET },
+      });
+
+      return res.json({
+        success: true,
+        message: "Password has been reset successfully. You can now login with your new password.",
+      });
+    }
+
+    if (!body.token) {
+      return res.status(400).json({
+        success: false,
+        error: "Reset token or OTP is required",
+      });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        email: emailLower,
+        resetToken: body.token,
+        resetTokenExpiry: { gt: new Date() },
+        isActive: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid or expired reset token. Please request a new password reset.",
+      });
+    }
+
+    const isSamePassword = await bcrypt.compare(password, user.password);
+    if (isSamePassword) {
+      return res.status(400).json({
+        success: false,
+        error: "New password cannot be the same as old password",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetToken: null,
+        resetTokenExpiry: null,
+        loginAttempts: 0,
+        passwordResetAttempts: 0,
+        lastPasswordChange: new Date(),
+      },
+    });
+
+    return res.json({
+      success: true,
+      message: "Password has been reset successfully. You can now login with your new password.",
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Reset password error:", err);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to reset password. Please try again.",
     });
   }
 });
